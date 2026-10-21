@@ -7,6 +7,7 @@ namespace drumbox
 DrumEngine::DrumEngine()
 {
     triggers.reserve (256);
+    notes.reserve (256);
     prepare (44100.0);
 }
 
@@ -17,6 +18,7 @@ void DrumEngine::prepare (double sampleRate)
     sequencer.reset();
     wasPlaying = false;
     currentStep.store (-1);
+    currentChainPosition.store (-1);
 }
 
 void DrumEngine::render (float* out, int numSamples)
@@ -28,14 +30,19 @@ void DrumEngine::render (float* out, int numSamples)
     if (playing && ! wasPlaying)
         sequencer.reset();
     if (! playing && wasPlaying)
+    {
         currentStep.store (-1);
+        currentChainPosition.store (-1);
+    }
     wasPlaying = playing;
 
     triggers.clear();
+    notes.clear();
     if (playing)
     {
-        sequencer.process (pattern, numSamples, triggers);
+        sequencer.process (song, numSamples, triggers, notes);
         currentStep.store (sequencer.getLastStep());
+        currentChainPosition.store (sequencer.getLastChainPosition());
     }
 
     // triggers are ordered by offset; voices keep ringing after a stop

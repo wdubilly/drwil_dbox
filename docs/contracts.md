@@ -195,6 +195,16 @@ contracts » section).
 **Manual** : the human tries the app and attests that the interface is easy to use and has a 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box — « The interface is easy to use and has a 70's funk feel »
 
+## DBX-007 — Patterns chain into a longer sequence that loops
+**Rule** : The song holds 16 patterns (each with the drums, the bass line and the synth) and a chain of 1 to 128 positions naming the pattern played at each; the sequencer plays the patterns of the chain one after the other in time (16 steps each, within one sample, independent of the audio block size), then loops to the first position. A chain of one position plays that pattern alone, exactly as `DBX-001` to `DBX-005` require.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Pattern.h`, `drumbox/Source/Sequencer.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-007` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a song is more than one bar, and chaining must not disturb the timing of a single pattern
+**Check** : `dbx-007`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « Up to 16 patterns, each holding the drums, the bass line and the synth, can be chained (up to 128 positions) and play one after the other in time, then loop »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

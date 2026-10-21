@@ -366,6 +366,153 @@ TEST ("DBX-005 tempo and swing changes are applied while playing", {
     CHECK (step == 15 || step == 0);
 })
 
+namespace
+{
+struct SongHit
+{
+    long long sample;
+    int track;
+};
+
+std::vector<SongHit> collectSong (Sequencer& seq, const Song& song, long long totalSamples, int block = 477)
+{
+    std::vector<SongHit> hits;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    long long done = 0;
+    while (done < totalSamples)
+    {
+        const int n = static_cast<int> (std::min<long long> (block, totalSamples - done));
+        out.clear();
+        notes.clear();
+        seq.process (song, n, out, notes);
+        for (auto& t : out)
+            hits.push_back ({ done + t.sampleOffset, t.track });
+        done += n;
+    }
+    return hits;
+}
+} // namespace
+
+TEST ("DBX-007 patterns of the chain play one after the other in time, then loop", {
+    Song song;
+    song.pattern (0).set (Kick, 0, StepState::Normal);
+    song.pattern (3).set (Snare, 0, StepState::Normal);
+    song.pattern (5).set (Cowbell, 8, StepState::Normal);
+    song.setChainLength (3);
+    song.setChainEntry (0, 0);
+    song.setChainEntry (1, 5);
+    song.setChainEntry (2, 3);
+
+    auto seq = makeSequencer (120.0, 0.0);
+    const double perStep = seq.samplesPerStep();
+    const auto hits = collectSong (seq, song, static_cast<long long> (perStep * (16.0 * 6.0 - 0.5)));
+    const int expectedTrack[] = { Kick, Cowbell, Snare, Kick, Cowbell, Snare };
+    const int expectedStep[] = { 0, 16 + 8, 32, 48, 64 + 8, 80 };
+    CHECK (hits.size() == 6);
+    for (size_t k = 0; k < std::min<size_t> (hits.size(), 6); ++k)
+    {
+        CHECK (hits[k].track == expectedTrack[k]);
+        CHECK (std::fabs (static_cast<double> (hits[k].sample) - perStep * expectedStep[k]) <= 1.0);
+    }
+})
+
+TEST ("DBX-007 sixteen patterns fill a chain of up to 128 positions", {
+    Song song;
+    for (int p = 0; p < numPatterns; ++p)
+        song.pattern (p).set (Kick, p, StepState::Normal);
+    song.setChainLength (1000);
+    CHECK (song.getChainLength() == maxChainLength);
+    song.setChainLength (0);
+    CHECK (song.getChainLength() == 1);
+    song.setChainLength (maxChainLength);
+    for (int pos = 0; pos < maxChainLength; ++pos)
+        song.setChainEntry (pos, (pos * 7) % numPatterns);
+
+    auto seq = makeSequencer (240.0, 0.0);
+    const double perStep = seq.samplesPerStep();
+    const auto hits = collectSong (seq, song, static_cast<long long> (perStep * 16.0 * (maxChainLength + 2)));
+    CHECK (hits.size() == static_cast<size_t> (maxChainLength + 2));
+    for (size_t k = 0; k < std::min<size_t> (hits.size(), maxChainLength + 2); ++k)
+    {
+        const size_t pos = k % maxChainLength;
+        const double step = 16.0 * static_cast<double> (k) + static_cast<double> ((pos * 7) % numPatterns);
+        CHECK (std::fabs (static_cast<double> (hits[k].sample) - perStep * step) <= 1.0);
+    }
+})
+
+TEST ("DBX-007 the chain does not depend on the audio block size", {
+    Song song;
+    song.pattern (0).set (Kick, 0, StepState::Normal);
+    song.pattern (1).set (Snare, 15, StepState::Normal);
+    song.setChainLength (2);
+    song.setChainEntry (1, 1);
+    auto a = makeSequencer (133.0, 30.0);
+    auto b = makeSequencer (133.0, 30.0);
+    const auto ha = collectSong (a, song, 200000, 64);
+    const auto hb = collectSong (b, song, 200000, 1024);
+    CHECK (ha.size() == hb.size());
+    CHECK (! ha.empty());
+    for (size_t i = 0; i < std::min (ha.size(), hb.size()); ++i)
+        CHECK (ha[i].sample == hb[i].sample && ha[i].track == hb[i].track);
+})
+
+TEST ("DBX-007 a single pattern played alone behaves as before", {
+    Song song;
+    Pattern alone;
+    for (int s = 0; s < numSteps; s += 3)
+    {
+        song.pattern (0).set (Snare, s, StepState::Accent);
+        alone.set (Snare, s, StepState::Accent);
+    }
+    auto a = makeSequencer (110.0, 20.0);
+    auto b = makeSequencer (110.0, 20.0);
+    const auto hs = collectSong (a, song, 100000);
+    const auto hp = collect (b, alone, 100000);
+    CHECK (hs.size() == hp.size());
+    CHECK (! hs.empty());
+    for (size_t i = 0; i < std::min (hs.size(), hp.size()); ++i)
+        CHECK (hs[i].sample == hp[i].sample && hs[i].track == hp[i].track);
+})
+
+TEST ("DBX-007 the engine plays the chain and reports its position", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    auto& song = e.getSong();
+    song.pattern (2).set (Kick, 0, StepState::Normal);
+    song.setChainLength (2);
+    song.setChainEntry (0, 1); // empty pattern: silence
+    song.setChainEntry (1, 2);
+    CHECK (e.getCurrentChainPosition() == -1);
+    e.setTempo (240.0);
+    e.setPlaying (true);
+    const int stepSamples = static_cast<int> (sampleRate * 60.0 / 240.0 / 4.0);
+    const auto first = renderEngine (e, stepSamples * 8);
+    CHECK (e.getCurrentChainPosition() == 0);
+    CHECK (peak (first) == 0.0f);
+    const auto second = renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 1);
+    CHECK (peak (second, 0, static_cast<size_t> (stepSamples * 8 + 2000)) > 0.05f);
+    renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 0);
+    e.setPlaying (false);
+    renderEngine (e, 512);
+    CHECK (e.getCurrentChainPosition() == -1);
+})
+
+TEST ("DBX-007 each pattern keeps its own drums, bass and synth", {
+    Song song;
+    song.pattern (4).set (Tom, 7, StepState::Accent);
+    song.pattern (4).setBass (2, 40, true);
+    song.pattern (4).setSynthNote (3, 1, 64);
+    CHECK (song.pattern (4).get (Tom, 7) == StepState::Accent);
+    CHECK (song.pattern (4).getBassNote (2) == 40);
+    CHECK (song.pattern (4).getSynthNote (3, 1) == 64);
+    CHECK (song.pattern (5).get (Tom, 7) == StepState::Off);
+    CHECK (song.pattern (5).getBassNote (2) == noNote);
+    CHECK (song.pattern (5).getSynthNote (3, 1) == noNote);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";

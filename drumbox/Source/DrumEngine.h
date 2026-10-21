@@ -21,7 +21,9 @@ public:
 
     void prepare (double sampleRate);
 
-    Pattern& getPattern() noexcept { return pattern; }
+    Song& getSong() noexcept { return song; }
+    // The first pattern of the bank, the one a fresh song plays alone.
+    Pattern& getPattern() noexcept { return song.pattern (0); }
 
     void setTempo (double bpm) noexcept { tempoRequest.store (bpm); }
     void setSwing (double percent) noexcept { swingRequest.store (percent); }
@@ -30,19 +32,23 @@ public:
 
     // Index of the step last triggered, or -1 when stopped.
     int getCurrentStep() const noexcept { return currentStep.load(); }
+    // Position in the chain being played, or -1 when stopped.
+    int getCurrentChainPosition() const noexcept { return currentChainPosition.load(); }
 
     // Mono output, mixed in `out`.
     void render (float* out, int numSamples);
 
 private:
-    Pattern pattern;
+    Song song;
     Sequencer sequencer;
     VoiceBank voices;
     std::vector<Trigger> triggers;
+    std::vector<NoteEvent> notes;
     std::atomic<double> tempoRequest { 120.0 };
     std::atomic<double> swingRequest { 0.0 };
     std::atomic<bool> playRequest { false };
     std::atomic<int> currentStep { -1 };
+    std::atomic<int> currentChainPosition { -1 };
     bool wasPlaying = false;
 };
 } // namespace drumbox

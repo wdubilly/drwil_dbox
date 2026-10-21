@@ -1,6 +1,6 @@
 # Project: Drum box, bass line, synth and pattern chain
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: 2026-10-21 — increment 1 (pattern chain) done, `DBX-007` tests pass; increments 2 to 4 to do.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/bass-synth-song.md`
@@ -67,6 +67,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Existing engine in `drumbox/Source/` (`Pattern.h`, `Sequencer.*`, `Voices.*`, `DrumEngine.*`), standalone UI in `MainComponent.*` and `FunkLookAndFeel.*`.
+- **Last state** (2026-10-21): increment 1 done — `Song` (16 patterns, chain of up to 128 positions) in `Pattern.h`, chain playback in `Sequencer.*` and `DrumEngine.*`, `DBX-007` contract, check and tests. `Pattern` already stores bass notes and synth notes (not played yet).
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [AI] increment 2 — bass voice (`DBX-008`).
