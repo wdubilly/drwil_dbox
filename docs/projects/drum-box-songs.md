@@ -63,6 +63,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Starts after the effects workstream (`docs/projects/drum-box-effects.md`) is closed.
+- **Last state** (2026-10-21): scoped, not started. The effects workstream is closed (see the journal).
 - **Uncommitted work**: none once committed.
 - **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
