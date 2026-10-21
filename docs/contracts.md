@@ -370,6 +370,45 @@ contracts » section).
 **Manual** : the human tries the app and attests that the effects panel, the send knobs and the preset selectors are easy to use, that the factory presets and the effects sound good, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-effects — « The effects and presets are easy to use in the interface and sound good in the 70's funk spirit »
 
+## DBX-018 — A saved song opens again identical, mixer and effects included
+**Rule** : A song is saved to a `.dbox` file, JSON text with the file extension `.dbox`, and opened again identical: tempo, swing, the 16 patterns (drums, bass, pad, pluck and FX steps, notes and accents), the whole chain, the sound knobs of the bass, pad and pluck, the mixer of the twelve tracks (mute, solo, volume, tune, detune and send) and the settings of the five effects of the master chain; what a preset sets is stored as the sound it gave, so presets need no file of their own. A file that is not a song of this format, is damaged, is bigger than 4 MB, or is not named `.dbox` is refused and the song is left exactly as it was; an out-of-range setting is brought back into range, a setting the file lacks goes back to its default. A save never leaves a half-written file behind.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/SongFile.h`, `drumbox/Source/SongFile.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-018` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a song that does not come back as it was lost is a song the user stops trusting, and a damaged file must never wipe the song being worked on
+**Check** : `dbx-018`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-songs — « A song saved to a `.dbox` file and opened again is identical »
+
+## DBX-019 — The WAV export is the stereo mix, 24-bit 44.1 kHz, of the chain played once with the effect tails, mute and solo applied
+**Rule** : Exporting the song gives a stereo 24-bit 44.1 kHz WAV file holding the chain played once from its first position (not looped), followed by the tails of the effects and of the voices until silence (one second below the 24-bit step, 60 seconds at most), with mute and solo applied from the first sample: a track that is not heard is silent. The rendering is offline, works on a copy of the song, and leaves the song and the running engine untouched; two exports of the same song give the same samples. The engine being mono, both channels carry the same signal.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/SongExport.h`, `drumbox/Source/SongExport.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-019` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : the export is the song leaving the app: it must be what is heard, complete with its tails and never cut or looped
+**Check** : `dbx-019`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-songs — « The WAV export is a stereo 24-bit 44.1 kHz file of the chain played once with the effect tails, mute and solo applied »
+
+## DBX-020 — The stems export writes one WAV file per track, plus the mix, all of the same length
+**Rule** : Exporting the stems writes the stereo mix (`<name>_mix.wav`) and one WAV file per track of the twelve (`<name>_<NN>_<TRACK>.wav`), in the same format as `DBX-019` and all of the same length in samples (the length of the mix with its tails). A stem is the track alone through the master chain, with its volume, tune and send; a track that is not heard (muted, or not soloed while another is) gives a silent file; with every effect off the stems add up to the mix. A name that is not a safe file name is refused and writes nothing.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/SongExport.h`, `drumbox/Source/SongExport.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-020` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : stems are made to be mixed again elsewhere: files of different lengths do not line up
+**Check** : `dbx-020`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-songs — « The stems export writes one WAV file per track, plus the stereo mix, all of the same length »
+
+## DBX-021 — Saving, opening and exporting are easy to use
+**Rule** : The standalone window offers OPEN SONG, SAVE SONG, EXPORT WAV and EXPORT STEMS buttons (with keyboard shortcuts), file dialogs that start in the songs folder (`DrumBox/songs` in the user's documents) and ask before overwriting, the name of the open song, a message when a file cannot be read or written, and an export that runs beside the music, while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge ease of use
+**Reason** : saving and exporting is where the user's work is kept or lost, a matter of confidence that only the requester can judge
+**Manual** : the human tries the app and attests that saving, opening, exporting the WAV and exporting the stems are easy to find and to use, that the messages are clear, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-songs — « Saving, opening and exporting are available in the interface, easy to use »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

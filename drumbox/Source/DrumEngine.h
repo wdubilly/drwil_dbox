@@ -42,6 +42,8 @@ public:
 
     void setTempo (double bpm) noexcept { tempoRequest.store (bpm); }
     void setSwing (double percent) noexcept { swingRequest.store (percent); }
+    double getTempo() const noexcept { return tempoRequest.load(); }
+    double getSwing() const noexcept { return swingRequest.load(); }
     void setPlaying (bool shouldPlay) noexcept { playRequest.store (shouldPlay); }
     bool isPlaying() const noexcept { return playRequest.load(); }
 
@@ -49,6 +51,10 @@ public:
     int getCurrentStep() const noexcept { return currentStep.load(); }
     // Position in the chain being played, or -1 when stopped.
     int getCurrentChainPosition() const noexcept { return currentChainPosition.load(); }
+
+    // Brings every track gain to its target at once, so an offline render starts with mute, solo and
+    // volume already in place instead of gliding to them. Not for the audio thread.
+    void settleMixer() noexcept;
 
     // Mono output, mixed in `out`.
     void render (float* out, int numSamples);

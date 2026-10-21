@@ -32,6 +32,13 @@ void DrumEngine::prepare (double sampleRate)
     currentChainPosition.store (-1);
 }
 
+void DrumEngine::settleMixer() noexcept
+{
+    const bool soloActive = mixer.anySolo();
+    for (int t = 0; t < numMixerTracks; ++t)
+        trackGain[static_cast<size_t> (t)] = mixer.targetGain (t, soloActive);
+}
+
 void DrumEngine::render (float* out, int numSamples)
 {
     sequencer.setTempo (tempoRequest.load());
