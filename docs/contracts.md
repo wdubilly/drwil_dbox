@@ -195,6 +195,45 @@ contracts » section).
 **Manual** : the human tries the app and attests that the interface is easy to use and has a 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box — « The interface is easy to use and has a 70's funk feel »
 
+## DBX-007 — Patterns chain into a longer sequence that loops
+**Rule** : The song holds 16 patterns (each with the drums, the bass line and the synth) and a chain of 1 to 128 positions naming the pattern played at each; the sequencer plays the patterns of the chain one after the other in time (16 steps each, within one sample, independent of the audio block size), then loops to the first position. A chain of one position plays that pattern alone, exactly as `DBX-001` to `DBX-005` require.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Pattern.h`, `drumbox/Source/Sequencer.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-007` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a song is more than one bar, and chaining must not disturb the timing of a single pattern
+**Check** : `dbx-007`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « Up to 16 patterns, each holding the drums, the bass line and the synth, can be chained (up to 128 positions) and play one after the other in time, then loop »
+
+## DBX-008 — The bass is a monophonic voice playing one note per step at the step's pitch
+**Rule** : Each step of a pattern can carry one bass note (pitch 24–96, MIDI numbering) and an accent flag; the bass is a single synthesised voice, so a new note takes over the one still sounding; each note plays at the pitch set on its step (within 3%), an empty step is silent, an accented note is at least 1.3 times the peak of a normal one, and the sound is finite, bounded and ends.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Instruments.cpp`, `drumbox/Source/Pattern.h`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-008` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a bass line is a melody of single notes; two bass notes at once would turn it into mud
+**Check** : `dbx-008`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « The bass line is a monophonic synthesised voice playing one note per step, at the pitch set on that step »
+
+## DBX-009 — The synth has four voices, two oscillators, a filter, an envelope and an LFO
+**Rule** : Each step of a pattern can carry up to four synth notes (and an accent flag) that play together; the synth has four voices (a fifth note takes over the oldest), each with two oscillators (the second tunable in semitones and cents), a low-pass filter, an attack-decay-sustain-release envelope, and one LFO that sweeps the filter cutoff (zero depth leaves the sound still); an empty step is silent, an accent is at least 1.3 times the peak of a normal step, and the sound is finite, bounded and ends.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Instruments.cpp`, `drumbox/Source/Pattern.h`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-009` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : chords and pads are what a synth adds next to the bass and the drums; its controls must each audibly do their job
+**Check** : `dbx-009`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « The synth is a four-voice polyphonic voice (two oscillators, filter, envelope, LFO) playing the notes set on its steps »
+
+## DBX-010 — The bass, synth and chain editors are easy to use and keep the 70's funk feel
+**Rule** : The standalone window lets the user edit the bass line and the synth step by step (note on/off, pitch by drag or wheel, accent), choose among the 16 patterns, and build the chain (a position grid and its length), while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the editors are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the bass, synth, pattern bank and chain editors are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-song — « The interface lets the user edit the bass and the synth, build the chain, and stays easy to use with the 70's funk feel »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

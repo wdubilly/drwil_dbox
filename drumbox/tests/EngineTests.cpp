@@ -366,6 +366,441 @@ TEST ("DBX-005 tempo and swing changes are applied while playing", {
     CHECK (step == 15 || step == 0);
 })
 
+namespace
+{
+struct SongHit
+{
+    long long sample;
+    int track;
+};
+
+std::vector<SongHit> collectSong (Sequencer& seq, const Song& song, long long totalSamples, int block = 477)
+{
+    std::vector<SongHit> hits;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    long long done = 0;
+    while (done < totalSamples)
+    {
+        const int n = static_cast<int> (std::min<long long> (block, totalSamples - done));
+        out.clear();
+        notes.clear();
+        seq.process (song, n, out, notes);
+        for (auto& t : out)
+            hits.push_back ({ done + t.sampleOffset, t.track });
+        done += n;
+    }
+    return hits;
+}
+} // namespace
+
+TEST ("DBX-007 patterns of the chain play one after the other in time, then loop", {
+    Song song;
+    song.pattern (0).set (Kick, 0, StepState::Normal);
+    song.pattern (3).set (Snare, 0, StepState::Normal);
+    song.pattern (5).set (Cowbell, 8, StepState::Normal);
+    song.setChainLength (3);
+    song.setChainEntry (0, 0);
+    song.setChainEntry (1, 5);
+    song.setChainEntry (2, 3);
+
+    auto seq = makeSequencer (120.0, 0.0);
+    const double perStep = seq.samplesPerStep();
+    const auto hits = collectSong (seq, song, static_cast<long long> (perStep * (16.0 * 6.0 - 0.5)));
+    const int expectedTrack[] = { Kick, Cowbell, Snare, Kick, Cowbell, Snare };
+    const int expectedStep[] = { 0, 16 + 8, 32, 48, 64 + 8, 80 };
+    CHECK (hits.size() == 6);
+    for (size_t k = 0; k < std::min<size_t> (hits.size(), 6); ++k)
+    {
+        CHECK (hits[k].track == expectedTrack[k]);
+        CHECK (std::fabs (static_cast<double> (hits[k].sample) - perStep * expectedStep[k]) <= 1.0);
+    }
+})
+
+TEST ("DBX-007 sixteen patterns fill a chain of up to 128 positions", {
+    Song song;
+    for (int p = 0; p < numPatterns; ++p)
+        song.pattern (p).set (Kick, p, StepState::Normal);
+    song.setChainLength (1000);
+    CHECK (song.getChainLength() == maxChainLength);
+    song.setChainLength (0);
+    CHECK (song.getChainLength() == 1);
+    song.setChainLength (maxChainLength);
+    for (int pos = 0; pos < maxChainLength; ++pos)
+        song.setChainEntry (pos, (pos * 7) % numPatterns);
+
+    auto seq = makeSequencer (240.0, 0.0);
+    const double perStep = seq.samplesPerStep();
+    const auto hits = collectSong (seq, song, static_cast<long long> (perStep * 16.0 * (maxChainLength + 2)));
+    CHECK (hits.size() == static_cast<size_t> (maxChainLength + 2));
+    for (size_t k = 0; k < std::min<size_t> (hits.size(), maxChainLength + 2); ++k)
+    {
+        const size_t pos = k % maxChainLength;
+        const double step = 16.0 * static_cast<double> (k) + static_cast<double> ((pos * 7) % numPatterns);
+        CHECK (std::fabs (static_cast<double> (hits[k].sample) - perStep * step) <= 1.0);
+    }
+})
+
+TEST ("DBX-007 the chain does not depend on the audio block size", {
+    Song song;
+    song.pattern (0).set (Kick, 0, StepState::Normal);
+    song.pattern (1).set (Snare, 15, StepState::Normal);
+    song.setChainLength (2);
+    song.setChainEntry (1, 1);
+    auto a = makeSequencer (133.0, 30.0);
+    auto b = makeSequencer (133.0, 30.0);
+    const auto ha = collectSong (a, song, 200000, 64);
+    const auto hb = collectSong (b, song, 200000, 1024);
+    CHECK (ha.size() == hb.size());
+    CHECK (! ha.empty());
+    for (size_t i = 0; i < std::min (ha.size(), hb.size()); ++i)
+        CHECK (ha[i].sample == hb[i].sample && ha[i].track == hb[i].track);
+})
+
+TEST ("DBX-007 a single pattern played alone behaves as before", {
+    Song song;
+    Pattern alone;
+    for (int s = 0; s < numSteps; s += 3)
+    {
+        song.pattern (0).set (Snare, s, StepState::Accent);
+        alone.set (Snare, s, StepState::Accent);
+    }
+    auto a = makeSequencer (110.0, 20.0);
+    auto b = makeSequencer (110.0, 20.0);
+    const auto hs = collectSong (a, song, 100000);
+    const auto hp = collect (b, alone, 100000);
+    CHECK (hs.size() == hp.size());
+    CHECK (! hs.empty());
+    for (size_t i = 0; i < std::min (hs.size(), hp.size()); ++i)
+        CHECK (hs[i].sample == hp[i].sample && hs[i].track == hp[i].track);
+})
+
+TEST ("DBX-007 the engine plays the chain and reports its position", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    auto& song = e.getSong();
+    song.pattern (2).set (Kick, 0, StepState::Normal);
+    song.setChainLength (2);
+    song.setChainEntry (0, 1); // empty pattern: silence
+    song.setChainEntry (1, 2);
+    CHECK (e.getCurrentChainPosition() == -1);
+    e.setTempo (240.0);
+    e.setPlaying (true);
+    const int stepSamples = static_cast<int> (sampleRate * 60.0 / 240.0 / 4.0);
+    const auto first = renderEngine (e, stepSamples * 8);
+    CHECK (e.getCurrentChainPosition() == 0);
+    CHECK (peak (first) == 0.0f);
+    const auto second = renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 1);
+    CHECK (peak (second, 0, static_cast<size_t> (stepSamples * 8 + 2000)) > 0.05f);
+    renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 0);
+    e.setPlaying (false);
+    renderEngine (e, 512);
+    CHECK (e.getCurrentChainPosition() == -1);
+})
+
+TEST ("DBX-007 each pattern keeps its own drums, bass and synth", {
+    Song song;
+    song.pattern (4).set (Tom, 7, StepState::Accent);
+    song.pattern (4).setBass (2, 40, true);
+    song.pattern (4).setSynthNote (3, 1, 64);
+    CHECK (song.pattern (4).get (Tom, 7) == StepState::Accent);
+    CHECK (song.pattern (4).getBassNote (2) == 40);
+    CHECK (song.pattern (4).getSynthNote (3, 1) == 64);
+    CHECK (song.pattern (5).get (Tom, 7) == StepState::Off);
+    CHECK (song.pattern (5).getBassNote (2) == noNote);
+    CHECK (song.pattern (5).getSynthNote (3, 1) == noNote);
+})
+
+namespace
+{
+constexpr int stepSamples120 = 5512; // one sixteenth at 120 bpm
+
+// Fundamental of a window, from the first autocorrelation peak close to the highest one
+double estimateFrequency (const std::vector<float>& wave, size_t from, size_t length)
+{
+    const int minLag = static_cast<int> (sampleRate / 2200.0);
+    const int maxLag = static_cast<int> (sampleRate / 45.0);
+    std::vector<double> r (static_cast<size_t> (maxLag) + 1, 0.0);
+    for (int lag = minLag; lag <= maxLag; ++lag)
+    {
+        double sum = 0.0;
+        for (size_t i = from; i + static_cast<size_t> (lag) < from + length; ++i)
+            sum += wave[i] * wave[i + static_cast<size_t> (lag)];
+        r[static_cast<size_t> (lag)] = sum;
+    }
+    const double best = *std::max_element (r.begin() + minLag, r.end());
+    for (int lag = minLag + 1; lag < maxLag; ++lag)
+        if (r[(size_t) lag] >= 0.9 * best && r[(size_t) lag] >= r[(size_t) lag - 1] && r[(size_t) lag] >= r[(size_t) lag + 1])
+            return sampleRate / lag;
+    return 0.0;
+}
+
+// Energy of the window at one frequency (Hann-windowed Goertzel)
+double powerAt (const std::vector<float>& wave, size_t from, size_t length, double freq)
+{
+    const double w = 2.0 * 3.141592653589793 * freq / sampleRate;
+    const double coeff = 2.0 * std::cos (w);
+    double s1 = 0.0, s2 = 0.0;
+    for (size_t i = 0; i < length; ++i)
+    {
+        const double hann = 0.5 - 0.5 * std::cos (2.0 * 3.141592653589793 * static_cast<double> (i) / static_cast<double> (length));
+        const double s = wave[from + i] * hann + coeff * s1 - s2;
+        s2 = s1;
+        s1 = s;
+    }
+    return (s1 * s1 + s2 * s2 - coeff * s1 * s2) / static_cast<double> (length);
+}
+
+bool isNear (double value, double expected, double ratio) { return std::fabs (value / expected - 1.0) < ratio; }
+
+std::vector<float> renderBass (const std::function<void (Pattern&)>& setup, int samples)
+{
+    DrumEngine e;
+    e.prepare (sampleRate);
+    setup (e.getPattern());
+    e.setPlaying (true);
+    return renderEngine (e, samples);
+}
+
+std::vector<float> renderSynthEngine (const std::function<void (Pattern&)>& setup, int samples)
+{
+    return renderBass (setup, samples); // same engine path, the pattern decides what plays
+}
+
+std::vector<float> renderPoly (PolySynth& synth, const SynthParams& params, int samples)
+{
+    std::vector<float> out (static_cast<size_t> (samples));
+    for (auto& v : out)
+        v = synth.next (params);
+    return out;
+}
+
+double highFrequencyShare (const std::vector<float>& v, size_t from, size_t to)
+{
+    double diff = 0.0, total = 1e-12;
+    for (size_t i = from + 1; i < to; ++i)
+    {
+        diff += (v[i] - v[i - 1]) * (v[i] - v[i - 1]);
+        total += v[i] * v[i];
+    }
+    return diff / total;
+}
+} // namespace
+
+TEST ("DBX-008 the bass plays the pitch set on the step", {
+    for (int note : { 33, 40, 45, 52, 57 })
+    {
+        const auto wave = renderBass ([note] (Pattern& p) { p.setBass (0, note); }, stepSamples120);
+        CHECK (peak (wave) > 0.05f);
+        const double f = estimateFrequency (wave, 900, 3400);
+        if (! isNear (f, noteToFrequency (note), 0.03))
+            std::cerr << "  note " << note << " measured " << f << " Hz\n";
+        CHECK (isNear (f, noteToFrequency (note), 0.03));
+    }
+})
+
+TEST ("DBX-008 one note per step, each step at its own pitch", {
+    const int notes[] = { 40, 52, 45 };
+    const auto wave = renderBass ([&notes] (Pattern& p)
+    {
+        for (int s = 0; s < 3; ++s)
+            p.setBass (s, notes[s]);
+    }, stepSamples120 * 3);
+    for (int s = 0; s < 3; ++s)
+        CHECK (isNear (estimateFrequency (wave, static_cast<size_t> (stepSamples120 * s + 900), 3400), noteToFrequency (notes[s]), 0.03));
+
+    auto seq = makeSequencer (120.0, 0.0);
+    Pattern pattern;
+    pattern.setBass (0, 40);
+    pattern.setBass (5, 47, true);
+    std::vector<Trigger> triggers;
+    std::vector<NoteEvent> events;
+    seq.process (pattern, stepSamples120 * 8, triggers, events);
+    CHECK (events.size() == 2);
+    if (events.size() == 2)
+    {
+        CHECK (events[0].instrument == Instrument::Bass && events[0].note == 40 && ! events[0].accent);
+        CHECK (events[1].instrument == Instrument::Bass && events[1].note == 47 && events[1].accent);
+        CHECK (std::abs (events[1].sampleOffset - 5 * seq.samplesPerStep()) <= 1.0);
+    }
+})
+
+TEST ("DBX-008 the bass is monophonic: a new note takes over the voice", {
+    BassParams params;
+    BassVoice single;
+    single.prepare (sampleRate);
+    single.noteOn (52, 0.6f, 4000);
+    BassVoice twice;
+    twice.prepare (sampleRate);
+    twice.noteOn (40, 0.6f, 4000);
+    for (int i = 0; i < 500; ++i)
+        twice.next (params);
+    twice.noteOn (52, 0.6f, 4000);
+
+    std::vector<float> a (5000), b (5000);
+    for (auto& v : a)
+        v = single.next (params);
+    for (auto& v : b)
+        v = twice.next (params);
+    CHECK (isNear (estimateFrequency (b, 900, 3000), noteToFrequency (52), 0.03));
+    CHECK (peak (b) < peak (a) * 1.25f);
+})
+
+TEST ("DBX-008 an off step is silent, an accent is louder and the note ends", {
+    CHECK (peak (renderBass ([] (Pattern&) {}, stepSamples120 * 4)) == 0.0f);
+    CHECK (peak (renderBass ([] (Pattern& p) { p.setBass (0, 40); p.setBass (0, noNote); }, stepSamples120 * 4)) == 0.0f);
+
+    const auto normal = renderBass ([] (Pattern& p) { p.setBass (0, 45, false); }, stepSamples120 * 6);
+    const auto accent = renderBass ([] (Pattern& p) { p.setBass (0, 45, true); }, stepSamples120 * 6);
+    CHECK (peak (accent) > peak (normal) * 1.3f);
+    CHECK (peak (accent) <= 1.0f);
+    for (float v : accent)
+        CHECK (std::isfinite (v));
+    CHECK (peak (normal, 0, 5000) > 0.05f);
+    CHECK (peak (normal, 20000, normal.size()) == 0.0f);
+})
+
+TEST ("DBX-008 a note outside the playable range is brought back into it", {
+    Pattern p;
+    p.setBass (0, 200);
+    CHECK (p.getBassNote (0) == highestNote);
+    p.setBass (0, 3);
+    CHECK (p.getBassNote (0) == lowestNote);
+})
+
+TEST ("DBX-009 the synth plays the notes set on its steps, up to four at once", {
+    const int chord[] = { 57, 61, 64, 68 };
+    const auto wave = renderSynthEngine ([&chord] (Pattern& p)
+    {
+        for (int v = 0; v < synthVoices; ++v)
+            p.setSynthNote (0, v, chord[v]);
+    }, stepSamples120);
+    CHECK (peak (wave) > 0.05f);
+    CHECK (peak (wave) <= 1.0f);
+    const double reference = powerAt (wave, 1500, 2900, 370.0);
+    for (int note : chord)
+    {
+        const double p = powerAt (wave, 1500, 2900, noteToFrequency (note));
+        if (p < 4.0 * reference)
+            std::cerr << "  note " << note << " weak: " << p << " vs " << reference << "\n";
+        CHECK (p > 4.0 * reference);
+    }
+
+    auto seq = makeSequencer (120.0, 0.0);
+    Pattern pattern;
+    pattern.setSynthNote (2, 0, 60);
+    pattern.setSynthNote (2, 3, 67);
+    std::vector<Trigger> triggers;
+    std::vector<NoteEvent> events;
+    seq.process (pattern, stepSamples120 * 4, triggers, events);
+    CHECK (events.size() == 2);
+    for (auto& ev : events)
+        CHECK (ev.instrument == Instrument::Synth);
+})
+
+TEST ("DBX-009 the synth has four voices and steals the oldest for a fifth note", {
+    PolySynth synth;
+    synth.prepare (sampleRate);
+    const SynthParams params;
+    for (int i = 0; i < 4; ++i)
+    {
+        synth.noteOn (50 + i * 3, 0.6f, 20000);
+        CHECK (synth.activeVoices() == i + 1);
+    }
+    synth.noteOn (80, 0.6f, 20000);
+    CHECK (synth.activeVoices() == 4);
+    synth.noteOn (80, 0.6f, 20000); // the same key again reuses its voice
+    CHECK (synth.activeVoices() == 4);
+
+    const auto wave = renderPoly (synth, params, 6000);
+    CHECK (powerAt (wave, 3000, 2900, noteToFrequency (50)) < 0.25 * powerAt (wave, 3000, 2900, noteToFrequency (80)));
+})
+
+TEST ("DBX-009 the second oscillator, the filter and the envelope shape the sound", {
+    auto play = [] (const std::function<void (SynthParams&)>& setup, int samples)
+    {
+        SynthParams params;
+        setup (params);
+        PolySynth synth;
+        synth.prepare (sampleRate);
+        synth.noteOn (57, 0.6f, 12000);
+        return renderPoly (synth, params, samples);
+    };
+
+    // oscillator 2 a fifth up adds energy at the fifth
+    const auto unison = play ([] (SynthParams& p) { p.osc2Mix = 0.5f; p.osc2Semitones = 0.0f; p.osc2Detune = 0.0f; }, 8000);
+    const auto fifth = play ([] (SynthParams& p) { p.osc2Mix = 0.5f; p.osc2Semitones = 7.0f; p.osc2Detune = 0.0f; }, 8000);
+    const double fifthFreq = noteToFrequency (57 + 7);
+    CHECK (powerAt (fifth, 3000, 4000, fifthFreq) > 4.0 * powerAt (unison, 3000, 4000, fifthFreq));
+
+    // a low cutoff darkens the sound
+    const auto dark = play ([] (SynthParams& p) { p.cutoff = 400.0f; }, 8000);
+    const auto bright = play ([] (SynthParams& p) { p.cutoff = 9000.0f; }, 8000);
+    CHECK (highFrequencyShare (dark, 3000, 8000) < 0.5 * highFrequencyShare (bright, 3000, 8000));
+
+    // a slow attack rises, then the release ends the note
+    const auto slow = play ([] (SynthParams& p) { p.attack = 0.2f; p.release = 0.1f; }, 30000);
+    CHECK (peak (slow, 0, 300) < 0.2f * peak (slow, 6000, 12000));
+    CHECK (peak (slow, 12000 + 6000, slow.size()) == 0.0f);
+
+    // the sustain level sets how loud a held note stays
+    const auto low = play ([] (SynthParams& p) { p.decay = 0.02f; p.sustain = 0.3f; }, 9000);
+    const auto high = play ([] (SynthParams& p) { p.decay = 0.02f; p.sustain = 0.9f; }, 9000);
+    CHECK (peak (high, 5000, 9000) > 2.0f * peak (low, 5000, 9000));
+    for (float v : high)
+        CHECK (std::isfinite (v));
+})
+
+TEST ("DBX-009 the LFO sweeps the brightness over time and is off at zero depth", {
+    auto variation = [] (float depth)
+    {
+        SynthParams params;
+        params.lfoDepth = depth;
+        params.lfoRate = 4.0f;
+        params.osc2Detune = 0.0f;
+        params.cutoff = 900.0f;
+        params.sustain = 0.8f;
+        params.decay = 0.05f;
+        PolySynth synth;
+        synth.prepare (sampleRate);
+        synth.noteOn (45, 0.6f, 90000);
+        const auto wave = renderPoly (synth, params, 80000);
+        double lo = 1e9, hi = 0.0;
+        for (size_t start = 10000; start + 4000 <= wave.size(); start += 4000)
+        {
+            const double brightness = highFrequencyShare (wave, start, start + 4000);
+            lo = std::min (lo, brightness);
+            hi = std::max (hi, brightness);
+        }
+        return hi / lo;
+    };
+    CHECK (variation (0.0f) < 1.1);
+    CHECK (variation (1.0f) > 3.0);
+})
+
+TEST ("DBX-009 the synth is silent without notes, accented louder, bounded and ends", {
+    CHECK (peak (renderSynthEngine ([] (Pattern&) {}, stepSamples120 * 4)) == 0.0f);
+
+    auto chord = [] (bool accent)
+    {
+        return renderSynthEngine ([accent] (Pattern& p)
+        {
+            for (int v = 0; v < synthVoices; ++v)
+                p.setSynthNote (0, v, 48 + v * 4);
+            p.setSynthAccent (0, accent);
+        }, stepSamples120 * 8);
+    };
+    const auto normal = chord (false);
+    const auto accent = chord (true);
+    CHECK (peak (accent) > peak (normal) * 1.3f);
+    CHECK (peak (accent) <= 1.0f);
+    for (float v : accent)
+        CHECK (std::isfinite (v));
+    CHECK (peak (normal, 40000, normal.size()) == 0.0f);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";
