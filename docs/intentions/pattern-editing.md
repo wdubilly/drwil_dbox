@@ -1,6 +1,6 @@
 # Intent: pattern editing comfort and piano roll
 
-**Status**: proposed on 2026-10-21.
+**Status**: scoped on 2026-10-21 into `docs/projects/drum-box-editing.md`; the intent is removed at the workstream's closing.
 
 ## Need
 
