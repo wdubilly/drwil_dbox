@@ -21,6 +21,9 @@ removes it when fully covered.
 | Brief | In one line |
 |---|---|
 | [drum-box](drum-box.md) | Retro 70's funk drum machine, plugin + standalone (JUCE) |
+| [song-save-export](song-save-export.md) | Save and load songs, export to WAV |
+| [track-view-mixer](track-view-mixer.md) | Track view, mute and solo |
+| [sound-presets-effects](sound-presets-effects.md) | Synth and bass presets, a few effects |
 | [pattern-editing](pattern-editing.md) | Pattern copy, piano roll, predictable chain edits |
 
 A one-line idea, too light for a brief, is noted with one command:
