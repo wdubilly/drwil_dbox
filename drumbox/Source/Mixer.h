@@ -21,6 +21,7 @@ constexpr std::array<const char*, numMixerTracks> mixerTrackNames { "KICK", "SNA
 constexpr float maxVolume = 1.5f;
 constexpr float maxTuneSemitones = 24.0f;
 constexpr float maxDetuneCents = 100.0f;
+constexpr float maxSend = 1.0f;
 
 // Song-wide mixer settings, not part of any pattern. The UI writes, the audio thread reads.
 class Mixer
@@ -32,11 +33,16 @@ public:
     void setTune (int track, float semitones) noexcept { if (valid (track)) slots[idx (track)].tune.store (std::clamp (semitones, -maxTuneSemitones, maxTuneSemitones)); }
     void setDetune (int track, float cents) noexcept { if (valid (track)) slots[idx (track)].detune.store (std::clamp (cents, -maxDetuneCents, maxDetuneCents)); }
 
+    void setSend (int track, float level) noexcept { if (valid (track)) slots[idx (track)].send.store (std::clamp (level, 0.0f, maxSend)); }
+
     bool isMuted (int track) const noexcept { return valid (track) && slots[idx (track)].mute.load(); }
     bool isSolo (int track) const noexcept { return valid (track) && slots[idx (track)].solo.load(); }
     float getVolume (int track) const noexcept { return valid (track) ? slots[idx (track)].volume.load() : 1.0f; }
     float getTune (int track) const noexcept { return valid (track) ? slots[idx (track)].tune.load() : 0.0f; }
     float getDetune (int track) const noexcept { return valid (track) ? slots[idx (track)].detune.load() : 0.0f; }
+
+    // Share of the track sent to the effects chain, on top of the dry mix; 0 by default.
+    float getSend (int track) const noexcept { return valid (track) ? slots[idx (track)].send.load() : 0.0f; }
 
     bool anySolo() const noexcept
     {
@@ -65,6 +71,7 @@ private:
         std::atomic<float> volume { 1.0f };
         std::atomic<float> tune { 0.0f };
         std::atomic<float> detune { 0.0f };
+        std::atomic<float> send { 0.0f };
     };
 
     static bool valid (int track) noexcept { return track >= 0 && track < numMixerTracks; }

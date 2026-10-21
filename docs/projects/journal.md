@@ -32,3 +32,7 @@ Added an FX track of six synthesised sounds: siren, laser, riser, impact, whoosh
 ## Drum box, track view, mute, solo, volume and tuning — closed 2026-10-22
 
 Added a song-wide mixer over the 12 tracks: mute and solo, with mute taking priority (`DBX-011`), volume from 0 to 150 % (`DBX-012`), tune of ±24 semitones and detune of ±100 cents (`DBX-029`), and a TRACKS view stacking every track with its chain map, attested by the human (`DBX-013`). Gains glide over about 3 ms to avoid clicks. Windows and Linux only. Limits: the rim noise component does not follow the tune; mute and solo are not yet applied to the WAV export (next brief). Full text: the git history of the brief (`git log --follow`).
+
+## Drum box, effects and sound presets — closed 2026-10-22
+
+Added five effects (distortion, chorus, compressor, delay, reverb) on a master chain (`DBX-014`), a send per track feeding it, bypassed when every effect is off (`DBX-015`), factory and user presets for the drum kits, bass, pad, pluck and FX tracks (`DBX-016`), and an EFFECTS view, sends in TRACKS and preset selectors with SAVE, attested by the human (`DBX-017`). Windows and Linux only. Limits: effect settings are neither stored in presets nor saved with songs; presets cover volume, tune, detune, send and sound knobs only; user presets on a Windows path with accents are not verified. Full text: the git history of the brief (`git log --follow`).

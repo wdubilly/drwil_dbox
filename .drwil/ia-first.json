@@ -167,6 +167,33 @@
         "drumbox/**",
         ".drwil/ia-first.json"
       ]
+    },
+    {
+      "id": "dbx-014",
+      "name": "DBX-014 five effects",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-014$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-015",
+      "name": "DBX-015 master chain and send per track",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-015$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-016",
+      "name": "DBX-016 factory and user presets",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-016$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
     }
   ],
   "scopeReminder": "blocking",

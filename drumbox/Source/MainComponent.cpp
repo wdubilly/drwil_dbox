@@ -277,7 +277,7 @@ namespace
 {
 constexpr int nameWidth = 86;
 constexpr int buttonWidth = 34;
-constexpr int controlsWidth = 2 * buttonWidth + 3 * 190;
+constexpr int controlsWidth = 2 * buttonWidth + 4 * 150;
 } // namespace
 
 TrackStrip::TrackStrip (Song& songToShow, Mixer& mixerToEdit, int trackIndex, std::function<void (int)> onOpen)
@@ -329,9 +329,19 @@ TrackStrip::TrackStrip (Song& songToShow, Mixer& mixerToEdit, int trackIndex, st
     setup (volume, "volume", 0.0, maxVolume * 100.0, 1.0, mixer.getVolume (track) * 100.0, " %");
     setup (tune, "tune", -maxTuneSemitones, maxTuneSemitones, 1.0, mixer.getTune (track), " st");
     setup (detune, "detune", -maxDetuneCents, maxDetuneCents, 1.0, mixer.getDetune (track), " ct");
+    setup (send, "send", 0.0, maxSend * 100.0, 1.0, mixer.getSend (track) * 100.0, " %");
+    send.onValueChange = [this] { mixer.setSend (track, (float) send.getValue() / 100.0f); };
     volume.onValueChange = [this] { mixer.setVolume (track, (float) volume.getValue() / 100.0f); };
     tune.onValueChange = [this] { mixer.setTune (track, (float) tune.getValue()); };
     detune.onValueChange = [this] { mixer.setDetune (track, (float) detune.getValue()); };
+}
+
+void TrackStrip::refreshFromMixer()
+{
+    volume.setValue (mixer.getVolume (track) * 100.0, juce::dontSendNotification);
+    tune.setValue (mixer.getTune (track), juce::dontSendNotification);
+    detune.setValue (mixer.getDetune (track), juce::dontSendNotification);
+    send.setValue (mixer.getSend (track) * 100.0, juce::dontSendNotification);
 }
 
 void TrackStrip::setCurrentPosition (int position)
@@ -421,13 +431,19 @@ void TrackStrip::resized()
     auto controls = area.removeFromRight (controlsWidth);
     muteButton.setBounds (controls.removeFromLeft (buttonWidth).reduced (2, 0));
     soloButton.setBounds (controls.removeFromLeft (buttonWidth).reduced (2, 0));
-    const int sliderWidth = controls.getWidth() / 3;
+    const int sliderWidth = controls.getWidth() / 4;
     volume.setBounds (controls.removeFromLeft (sliderWidth));
     tune.setBounds (controls.removeFromLeft (sliderWidth));
-    detune.setBounds (controls);
+    detune.setBounds (controls.removeFromLeft (sliderWidth));
+    send.setBounds (controls);
 }
 
 MainComponent::MainComponent()
+    : presetStore (juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                       .getChildFile ("DrumBox")
+                       .getChildFile ("presets")
+                       .getFullPathName()
+                       .toStdString())
 {
     juce::String error = deviceManager.initialiseWithDefaultDevices (0, 2);
     juce::ignoreUnused (error);
@@ -444,7 +460,7 @@ MainComponent::MainComponent()
     legendLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (legendLabel);
 
-    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "FX", "CHAIN", "TRACKS" };
+    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "FX", "CHAIN", "TRACKS", "EFFECTS" };
     for (int v = 0; v < numViews; ++v)
     {
         auto& b = viewButtons[(size_t) v];
@@ -642,6 +658,63 @@ MainComponent::MainComponent()
         k->slider.onValueChange = applyInstrumentParams;
     applyInstrumentParams();
 
+    // EFFECTS view
+    {
+        static const char* const knobNames[numEffects][3] = { { "SIZE", "DAMP", "MIX" }, { "TIME", "FEEDBACK", "MIX" },
+                                                              { "DRIVE", "TONE", "MIX" }, { "RATE", "DEPTH", "MIX" },
+                                                              { "THRESHOLD", "RATIO", "MAKEUP" } };
+        static const char* const knobSuffix[numEffects][3] = { { " %", " %", " %" }, { " ms", " %", " %" },
+                                                               { " %", " %", " %" }, { " Hz", " %", " %" },
+                                                               { " dB", " : 1", " dB" } };
+        for (int e = 0; e < numEffects; ++e)
+        {
+            auto& button = effectButtons[(size_t) e];
+            button.setButtonText (EffectsRack::effectName (e));
+            button.setTitle (juce::String (EffectsRack::effectName (e)) + " on / off");
+            button.setClickingTogglesState (true);
+            button.setColour (juce::TextButton::buttonOnColourId, palette::orange);
+            auto settings = engine.getEffects().settings (e);
+            button.setToggleState (settings[0].value->load() >= 0.5f, juce::dontSendNotification);
+            button.onClick = [this, e, &button]
+            {
+                engine.getEffects().settings (e)[0].value->store (button.getToggleState() ? 1.0f : 0.0f);
+            };
+            addChildComponent (button);
+
+            for (int k = 0; k < 3; ++k)
+            {
+                const auto& setting = settings[(size_t) k + 1];
+                const float scale = setting.max <= 1.0f ? 100.0f : 1.0f;
+                effectScale[(size_t) e][(size_t) k] = scale;
+                auto& knob = effectKnobs[(size_t) e][(size_t) k];
+                const double step = scale == 100.0f ? 1.0 : (setting.max - setting.min > 100.0f ? 1.0 : 0.1);
+                const double skew = std::string (setting.name) == "time" ? 300.0 : 0.0;
+                addKnob (knob, knobNames[e][k], setting.min * scale, setting.max * scale, step, setting.value->load() * scale,
+                         knobSuffix[e][k], skew);
+                knob.slider.setTitle (juce::String (EffectsRack::effectName (e)) + " " + knobNames[e][k]);
+                knob.slider.onValueChange = [this, e, k]
+                {
+                    auto all = engine.getEffects().settings (e);
+                    all[(size_t) k + 1].value->store ((float) effectKnobs[(size_t) e][(size_t) k].slider.getValue()
+                                                      / effectScale[(size_t) e][(size_t) k]);
+                };
+            }
+        }
+    }
+
+    // preset bar
+    presetLabel.setText ("PRESET", juce::dontSendNotification);
+    presetLabel.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
+    presetLabel.setColour (juce::Label::textColourId, palette::cream);
+    addChildComponent (presetLabel);
+    presetBox.setTitle ("Preset");
+    presetBox.setTextWhenNothingSelected ("choose a preset");
+    presetBox.onChange = [this] { applySelectedPreset(); };
+    addChildComponent (presetBox);
+    presetSave.setTitle ("Save the sound as a user preset");
+    presetSave.onClick = [this] { askPresetName(); };
+    addChildComponent (presetSave);
+
     loadStarterSong();
     chainLengthSlider.setValue (song.getChainLength(), juce::dontSendNotification);
 
@@ -750,6 +823,20 @@ void MainComponent::showView (View newView)
         l.setVisible (view == Pluck);
     show (chainCells, view == Chain);
     show (trackStrips, view == Tracks);
+    for (int e = 0; e < numEffects; ++e)
+    {
+        effectButtons[(size_t) e].setVisible (view == Effects);
+        for (auto& k : effectKnobs[(size_t) e])
+        {
+            k.slider.setVisible (view == Effects);
+            k.label.setVisible (view == Effects);
+        }
+    }
+    presetLabel.setVisible (hasPresets());
+    presetBox.setVisible (hasPresets());
+    presetSave.setVisible (hasPresets());
+    if (hasPresets())
+        fillPresetList();
     chainLengthLabel.setVisible (view == Chain);
     chainLengthSlider.setVisible (view == Chain);
     for (auto* k : { &bassCutoff, &bassDecay })
@@ -776,11 +863,101 @@ void MainComponent::showView (View newView)
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click a step: off / normal / ACCENT",
         "click a position to give it the selected pattern   LENGTH: positions before the loop",
-        "M: mute   S: solo   click a track to edit it   double-click a slider to reset it"
+        "M: mute   S: solo   click a track to edit it   SEND: share sent to the effects   double-click a slider to reset it",
+        "switch an effect on, then turn its knobs   the sends of the tracks (TRACKS view) feed the chain"
     };
     legendLabel.setText (legends[view], juce::dontSendNotification);
     resized();
     repaint();
+}
+
+void MainComponent::syncControlsFromEngine()
+{
+    const auto set = [] (Knob& k, double value) { k.slider.setValue (value, juce::dontSendNotification); };
+    auto& b = engine.getBassParams();
+    set (bassCutoff, b.cutoff.load());
+    set (bassDecay, b.decay.load());
+    auto& sy = engine.getSynthParams();
+    set (osc2Semitones, sy.osc2Semitones.load());
+    set (osc2Detune, sy.osc2Detune.load());
+    set (osc2Mix, sy.osc2Mix.load() * 100.0);
+    set (synthCutoff, sy.cutoff.load());
+    set (synthResonance, sy.resonance.load() * 100.0);
+    set (synthAttack, sy.attack.load());
+    set (synthDecay, sy.decay.load());
+    set (synthSustain, sy.sustain.load() * 100.0);
+    set (synthRelease, sy.release.load());
+    set (lfoRate, sy.lfoRate.load());
+    set (lfoDepth, sy.lfoDepth.load() * 100.0);
+    auto& p = engine.getPluckParams();
+    set (pluckCutoff, p.cutoff.load());
+    set (pluckDecay, p.decay.load());
+    set (pluckResonance, p.resonance.load() * 100.0);
+    set (pluckMix, p.osc2Mix.load() * 100.0);
+    for (auto& strip : trackStrips)
+        strip->refreshFromMixer();
+}
+
+void MainComponent::fillPresetList()
+{
+    presetBox.clear (juce::dontSendNotification);
+    int id = 1;
+    for (const auto& preset : PresetBank::factory (presetKind()))
+        presetBox.addItem (preset.name, id++);
+    const auto users = presetStore.list (presetKind());
+    if (! users.empty())
+    {
+        presetBox.addSeparator();
+        presetBox.addSectionHeading ("USER");
+        for (const auto& name : users)
+            presetBox.addItem (name, userPresetFirstId + (int) (&name - users.data()));
+    }
+    presetBox.setSelectedId (0, juce::dontSendNotification);
+}
+
+void MainComponent::applySelectedPreset()
+{
+    const int id = presetBox.getSelectedId();
+    if (id <= 0)
+        return;
+    PresetBank bank (engine);
+    if (id < userPresetFirstId)
+        bank.apply (PresetBank::factory (presetKind())[(size_t) id - 1]);
+    else if (! bank.loadUser (presetStore, presetKind(), presetBox.getText().toStdString()))
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Preset",
+                                                "This preset could not be read.");
+        return;
+    }
+    syncControlsFromEngine();
+}
+
+void MainComponent::askPresetName()
+{
+    auto* window = new juce::AlertWindow ("Save preset", "Name of the new " + juce::String (presetKindName (presetKind())) + " preset",
+                                          juce::MessageBoxIconType::NoIcon);
+    window->addTextEditor ("name", "", "Name");
+    window->addButton ("SAVE", 1, juce::KeyPress (juce::KeyPress::returnKey));
+    window->addButton ("CANCEL", 0, juce::KeyPress (juce::KeyPress::escapeKey));
+    window->enterModalState (true,
+                             juce::ModalCallbackFunction::create ([this, window] (int result)
+                                                                  {
+                                                                      if (result == 1)
+                                                                          saveUserPreset (window->getTextEditorContents ("name").trim());
+                                                                  }),
+                             true);
+}
+
+void MainComponent::saveUserPreset (const juce::String& name)
+{
+    if (! PresetBank (engine).saveUser (presetStore, presetKind(), name.toStdString()))
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Preset",
+                                                "The name can hold letters, digits, spaces, - _ . (40 at most), and the preset folder must be writable.");
+        return;
+    }
+    fillPresetList();
+    presetBox.setText (name, juce::dontSendNotification);
 }
 
 void MainComponent::openTrackEditor (int mixerTrack)
@@ -901,10 +1078,10 @@ void MainComponent::resized()
     auto area = getLocalBounds().reduced (16);
     auto header = area.removeFromTop (54);
     titleLabel.setBounds (header.removeFromLeft (230));
-    auto tabs = header.removeFromRight (numViews * 88 + 12);
+    auto tabs = header.removeFromRight (numViews * 82 + 12);
     for (auto& b : viewButtons)
     {
-        b.setBounds (tabs.removeFromLeft (88).reduced (3, 6));
+        b.setBounds (tabs.removeFromLeft (82).reduced (3, 6));
     }
     legendLabel.setBounds (header);
     area.removeFromTop (16);
@@ -919,6 +1096,14 @@ void MainComponent::resized()
     auto side = area.removeFromRight (134);
     panel = area;
     auto inner = area.reduced (10);
+    if (hasPresets())
+    {
+        presetBar = inner.removeFromBottom (40);
+        inner.removeFromBottom (6);
+        presetLabel.setBounds (presetBar.removeFromLeft (90));
+        presetSave.setBounds (presetBar.removeFromRight (90).reduced (2, 4));
+        presetBox.setBounds (presetBar.removeFromLeft (juce::jmin (320, presetBar.getWidth())).reduced (2, 4));
+    }
 
     side.removeFromLeft (14);
     playButton.setBounds (side.removeFromTop (64));
@@ -1002,6 +1187,23 @@ void MainComponent::resized()
         const int stripHeight = inner.getHeight() / numMixerTracks;
         for (int t = 0; t < numMixerTracks; ++t)
             trackStrips[(size_t) t]->setBounds (inner.getX(), inner.getY() + t * stripHeight, inner.getWidth(), stripHeight);
+    }
+
+    // effects: five columns, an on button then three knobs
+    {
+        const int columnWidth = inner.getWidth() / numEffects;
+        for (int e = 0; e < numEffects; ++e)
+        {
+            auto column = inner.withTrimmedLeft (e * columnWidth).withWidth (columnWidth).reduced (8, 0);
+            effectButtons[(size_t) e].setBounds (column.removeFromTop (44).reduced (0, 4));
+            const int knobHeight = column.getHeight() / 3;
+            for (auto& k : effectKnobs[(size_t) e])
+            {
+                auto cell = column.removeFromTop (knobHeight);
+                k.label.setBounds (cell.removeFromTop (20));
+                k.slider.setBounds (cell);
+            }
+        }
     }
 
     // chain: 16 positions per row, 8 rows, then the length

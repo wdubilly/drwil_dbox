@@ -331,6 +331,45 @@ contracts » section).
 **Manual** : the human tries the app and attests that the TRACKS view shows the twelve tracks stacked with mute, solo, volume, tune and detune, that clicking a track opens its editor, and that it is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-mixer — « A TRACKS view stacks the twelve tracks one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor »
 
+## DBX-014 — Each of the five effects audibly changes the sound when on and leaves it untouched when off
+**Rule** : The engine offers five effects — reverb, delay, distortion, chorus and compressor — each with an on switch (off by default) and its own settings: when on, an effect audibly changes the sound (a tail for the reverb, echoes at its time for the delay, a squarer wave for the distortion, a moving copy for the chorus, lower loud levels for the compressor); when off it is skipped and the sound is exactly the one without it, so with all five off the engine sound is as before (`DBX-001` to `DBX-013` unchanged). Output stays finite and within ±1 whatever the settings.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Effects.h`, `drumbox/Source/Effects.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-014` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : shaping the sound is the point of the effects; an effect that is off must never colour the mix
+**Check** : `dbx-014`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-effects — « Five effects: reverb, delay, distortion, chorus and compressor »
+
+## DBX-015 — Each of the twelve tracks has an effect send, and the master chain processes the sum of the sends and the dry mix
+**Rule** : Each of the twelve tracks has a send (0 to 100 %, 0 by default, song-wide and outside any pattern) to the master effects chain; the chain (distortion, chorus, compressor, delay, reverb, in that order) processes the dry mix of all tracks plus the sum of the tracks multiplied by their send, so a send makes that track weigh more in the chain and leaves the other tracks unchanged; a muted track sends nothing; with every effect off the chain is bypassed, the sends are ignored and the sound is as before.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Mixer.h`, `drumbox/Source/Effects.cpp`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-015` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : an effect applied only on some tracks is how a mix keeps its depth without turning to mud
+**Check** : `dbx-015`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-effects — « One effect chain on the master output plus a send per track »
+
+## DBX-016 — Factory presets exist for every sound, and a user preset saved and loaded gives the same sound
+**Rule** : Factory presets ship for the drum kit (the eight drums), the bass, the pad, the pluck and the FX (at least four each, the first one, `Default`, being the sound as before); applying a preset sets the settings of its tracks (volume, tune, detune, send and, for an instrument, its sound knobs) and touches no other track. A user can save the current sound of a kind under a name and load it back to get the same sound; user presets are files in a per-user folder read and written through a small store interface (replaced by memory in the tests). A name that is not a safe file name, a missing file, a preset of another kind or damaged text is refused and changes nothing; out-of-range values are brought back into range.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Presets.h`, `drumbox/Source/Presets.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-016` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a sound found once must be recalled and kept, and a preset file must never reach outside its folder
+**Check** : `dbx-016`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-effects — « Presets are factory and user, on every track (drum kits, bass, pad, pluck, FX) »
+
+## DBX-017 — The effects and presets are easy to use and sound good in the 70's funk spirit
+**Rule** : The standalone window offers an EFFECTS view (on switch and knobs for each of the five effects), a send knob on each track of the TRACKS view, and for each track editor a preset selector with a save button (factory presets, then user presets), while staying easy to use and keeping the 70's funk look of `DBX-006`; the factory presets and the effects sound good in the 70's funk spirit.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the interface and the sound are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the effects panel, the send knobs and the preset selectors are easy to use, that the factory presets and the effects sound good, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-effects — « The effects and presets are easy to use in the interface and sound good in the 70's funk spirit »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |
