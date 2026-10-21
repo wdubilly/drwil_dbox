@@ -18,7 +18,7 @@ files:
 ## 1. Need
 
 Let the user mix what they hear and see the whole song at a glance: mute or
-solo any of the eleven tracks (the eight drums, the bass, the pad, the pluck), set a
+solo any of the twelve tracks (the eight drums, the bass, the pad, the pluck, the FX), set a
 volume, a tune and a detune per track, and see every track stacked one above the other in a track
 view. Windows and Linux only.
 
@@ -27,7 +27,7 @@ view. Windows and Linux only.
 - A muted track is silent; with one or several tracks in solo, only those tracks are heard; with none in solo, all unmuted tracks are heard — `DBX-011`
 - Each track has its own volume: a lower volume makes that track quieter and leaves the others unchanged — `DBX-012`
 - Each track has a tune (±24 semitones) and a detune (±100 cents): the pitch of a drum voice, or of every note of the bass, the pad and the pluck, moves by that amount, and the other tracks are unchanged; at 0 the sound is as today — `DBX-029`
-- A TRACKS view stacks the eight drums, the bass, the pad and the pluck one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor [human] — `DBX-013`
+- A TRACKS view stacks the eight drums, the bass, the pad, the pluck and the FX one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor [human] — `DBX-013`
 
 ## 2. Out of scope
 
@@ -61,10 +61,10 @@ None open.
 ## 6. Increments
 
 - **Increment 1 — mixer in the engine** [AI]: mute, solo, volume, tune and detune per track applied when mixing. Exit criterion: `DBX-011`, `DBX-012` and `DBX-029` tests pass and `DBX-001` to `DBX-010` still pass.
-- **Increment 2 — TRACKS view** [AI]: eleven stacked tracks with the pattern chain, mute, solo, volume, tune, detune and a click to open the track's editor, in the funk style. Exit criterion: the app builds on Linux and in the Windows CI job; `DBX-013` attested by the human.
+- **Increment 2 — TRACKS view** [AI]: twelve stacked tracks with the pattern chain, mute, solo, volume, tune, detune and a click to open the track's editor, in the funk style. Exit criterion: the app builds on Linux and in the Windows CI job; `DBX-013` attested by the human.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Engine in `drumbox/Source/` (`DrumEngine.*` mixes the voices), UI in `MainComponent.*` with views DRUMS, BASS, PAD, PLUCK and CHAIN (after the pluck workstream).
+- **Last state** (2026-10-21): scoped, not started. Engine in `drumbox/Source/` (`DrumEngine.*` mixes the voices), UI in `MainComponent.*` with views DRUMS, BASS, PAD, PLUCK, FX and CHAIN (after the pluck and FX workstreams).
 - **Uncommitted work**: none once committed.
 - **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.

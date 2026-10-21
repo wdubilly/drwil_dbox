@@ -26,6 +26,7 @@ otherwise.
 ## Projects
 
 - [ ] [decision] [P1] Drum box, pluck synth track: `docs/projects/drum-box-pluck.md`
+- [ ] [decision] [P1] Drum box, sound effects track: `docs/projects/drum-box-fx.md`
 - [ ] [decision] [P1] Drum box, pattern editing and piano roll: `docs/projects/drum-box-editing.md`
 - [ ] [decision] [P1] Drum box, save songs and export to WAV: `docs/projects/drum-box-songs.md`
 - [ ] [decision] [P1] Drum box, effects and sound presets: `docs/projects/drum-box-effects.md`

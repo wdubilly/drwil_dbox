@@ -61,6 +61,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. First of the queue: pluck, then mixer, effects, songs, editing.
+- **Last state** (2026-10-21): scoped, not started. First of the queue: pluck, FX, then mixer, effects, songs, editing.
 - **Uncommitted work**: none once committed.
 - **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.

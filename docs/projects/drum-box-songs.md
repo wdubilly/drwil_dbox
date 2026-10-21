@@ -22,7 +22,7 @@ to WAV, as a stereo mix and as one file per track. Windows and Linux only.
 
 ## Acceptance criteria
 
-- A song saved to a `.dbox` file and opened again is identical: patterns, chain, tempo, swing, bass, pad, pluck, mixer (volume, tune and detune included), effects and presets — `DBX-018`
+- A song saved to a `.dbox` file and opened again is identical: patterns, chain, tempo, swing, bass, pad, pluck, FX, mixer (volume, tune and detune included), effects and presets — `DBX-018`
 - The WAV export of the song is a stereo 24-bit 44.1 kHz file holding the chain played once with the effect tails, with mute and solo applied — `DBX-019`
 - The stems export writes one WAV file per track, plus the stereo mix, all of the same length — `DBX-020`
 - Saving, opening and exporting are available in the interface, easy to use [human] — `DBX-021`
