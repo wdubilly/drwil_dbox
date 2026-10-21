@@ -25,7 +25,6 @@ otherwise.
 
 ## Projects
 
-- [ ] [decision] [P1] Drum box, first slice (standalone, 8 synthesised tracks): `docs/projects/drum-box.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines
