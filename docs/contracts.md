@@ -177,14 +177,13 @@ contracts » section).
 **Origin** : drum-box — « Eight tracks (kick, snare, closed hat, open hat, clap, tom, rim, cowbell) each produce a distinct synthesised sound »
 
 ## DBX-005 — The standalone app starts, plays and stops
-**Rule** : The standalone JUCE app target builds, and the engine behind its PLAY/STOP button starts from step 1, stops stepping on stop, and applies tempo and swing changes while playing. Opening the window and the audio device is not exercised by a machine: see the Manual field.
+**Rule** : The standalone JUCE app target builds, and the engine behind its PLAY/STOP button starts from step 1, stops stepping on stop, and applies tempo and swing changes while playing. Opening the window and the audio device is not exercised by a machine (checked by hand under DBX-006).
 **Scope** : the drum box engine (`drumbox/Source/`)
 **Source of truth** : `drumbox/Source/MainComponent.cpp`, `drumbox/Source/DrumEngine.cpp`
-**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-005` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-005` (`.drwil/ia-first.json`), hook + `drwil verify`; the build needs the JUCE system dependencies (X11, ALSA, FreeType development packages on Linux)
 **Reason** : the first thing a user does is press play and stop
 **Check** : `dbx-005`
 **Tests** : `drumbox/tests/EngineTests.cpp`
-**Manual** : opening the window and hearing sound on a real audio device is verified by hand; the check needs the JUCE build dependencies (X11, ALSA, FreeType development packages on Linux).
 **Origin** : drum-box — « The standalone app starts, plays and stops from its own window »
 
 ## DBX-006 — The interface is easy to use and has a 70's funk feel
