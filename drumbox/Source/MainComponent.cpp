@@ -273,6 +273,160 @@ void ChainCell::paintButton (juce::Graphics& g, bool highlighted, bool down)
     }
 }
 
+namespace
+{
+constexpr int nameWidth = 86;
+constexpr int buttonWidth = 34;
+constexpr int controlsWidth = 2 * buttonWidth + 3 * 190;
+} // namespace
+
+TrackStrip::TrackStrip (Song& songToShow, Mixer& mixerToEdit, int trackIndex, std::function<void (int)> onOpen)
+    : song (songToShow), mixer (mixerToEdit), track (trackIndex), open (std::move (onOpen))
+{
+    const juce::String name = mixerTrackNames[(size_t) trackIndex];
+
+    nameButton.setButtonText (name);
+    nameButton.setTitle ("Open the " + name + " editor");
+    nameButton.onClick = [this] { open (track); };
+    addAndMakeVisible (nameButton);
+
+    muteButton.setTitle ("Mute " + name);
+    muteButton.setClickingTogglesState (true);
+    muteButton.setColour (juce::TextButton::buttonOnColourId, palette::orange);
+    muteButton.setToggleState (mixer.isMuted (track), juce::dontSendNotification);
+    muteButton.onClick = [this]
+    {
+        mixer.setMute (track, muteButton.getToggleState());
+        if (onAudibilityChange)
+            onAudibilityChange();
+    };
+    addAndMakeVisible (muteButton);
+
+    soloButton.setTitle ("Solo " + name);
+    soloButton.setClickingTogglesState (true);
+    soloButton.setColour (juce::TextButton::buttonOnColourId, palette::mustard);
+    soloButton.setToggleState (mixer.isSolo (track), juce::dontSendNotification);
+    soloButton.onClick = [this]
+    {
+        mixer.setSolo (track, soloButton.getToggleState());
+        if (onAudibilityChange)
+            onAudibilityChange();
+    };
+    addAndMakeVisible (soloButton);
+
+    const auto setup = [this, &name] (juce::Slider& slider, const juce::String& what, double min, double max, double step,
+                                      double initial, const juce::String& suffix)
+    {
+        slider.setSliderStyle (juce::Slider::LinearHorizontal);
+        slider.setTextBoxStyle (juce::Slider::TextBoxRight, false, 62, 22);
+        slider.setRange (min, max, step);
+        slider.setValue (initial, juce::dontSendNotification);
+        slider.setTextValueSuffix (suffix);
+        slider.setDoubleClickReturnValue (true, what == "volume" ? 100.0 : 0.0);
+        slider.setTitle (name + " " + what);
+        addAndMakeVisible (slider);
+    };
+    setup (volume, "volume", 0.0, maxVolume * 100.0, 1.0, mixer.getVolume (track) * 100.0, " %");
+    setup (tune, "tune", -maxTuneSemitones, maxTuneSemitones, 1.0, mixer.getTune (track), " st");
+    setup (detune, "detune", -maxDetuneCents, maxDetuneCents, 1.0, mixer.getDetune (track), " ct");
+    volume.onValueChange = [this] { mixer.setVolume (track, (float) volume.getValue() / 100.0f); };
+    tune.onValueChange = [this] { mixer.setTune (track, (float) tune.getValue()); };
+    detune.onValueChange = [this] { mixer.setDetune (track, (float) detune.getValue()); };
+}
+
+void TrackStrip::setCurrentPosition (int position)
+{
+    if (currentPosition != position)
+    {
+        currentPosition = position;
+        repaint (mapArea());
+    }
+}
+
+bool TrackStrip::playsIn (const Pattern& pattern) const
+{
+    for (int s = 0; s < numSteps; ++s)
+    {
+        if (track < numTracks)
+        {
+            if (pattern.get (track, s) != StepState::Off)
+                return true;
+        }
+        else if (track == mixerBass)
+        {
+            if (pattern.getBassNote (s) != noNote)
+                return true;
+        }
+        else if (track == mixerFx)
+        {
+            for (int r = 0; r < numFxRows; ++r)
+                if (pattern.getFx (r, s) != StepState::Off)
+                    return true;
+        }
+        else
+        {
+            const int voices = track == mixerPad ? synthVoices : pluckVoices;
+            for (int v = 0; v < voices; ++v)
+                if ((track == mixerPad ? pattern.getSynthNote (s, v) : pattern.getPluckNote (s, v)) != noNote)
+                    return true;
+        }
+    }
+    return false;
+}
+
+juce::Rectangle<int> TrackStrip::mapArea() const
+{
+    return getLocalBounds().reduced (4, 4).withTrimmedLeft (nameWidth + 6).withTrimmedRight (controlsWidth + 6).reduced (0, 4);
+}
+
+void TrackStrip::mouseUp (const juce::MouseEvent& e)
+{
+    if (mapArea().contains (e.getPosition()) && e.mouseWasClicked())
+        open (track);
+}
+
+void TrackStrip::paint (juce::Graphics& g)
+{
+    auto area = getLocalBounds().toFloat().reduced (1.0f, 2.0f);
+    const bool heard = mixer.targetGain (track, mixer.anySolo()) > 0.0f;
+    g.setColour (palette::brownInk.withAlpha (0.45f));
+    g.fillRoundedRectangle (area, 6.0f);
+    g.setColour (heard ? palette::mustard.withAlpha (0.7f) : palette::wood);
+    g.drawRoundedRectangle (area, 6.0f, 1.5f);
+
+    // the chain, one cell per position: lit where this track plays in that position's pattern
+    const auto map = mapArea();
+    const int length = song.getChainLength();
+    const float cellWidth = (float) map.getWidth() / (float) length;
+    for (int p = 0; p < length; ++p)
+    {
+        auto cell = juce::Rectangle<float> ((float) map.getX() + (float) p * cellWidth, (float) map.getY(), cellWidth, (float) map.getHeight())
+                        .reduced (cellWidth > 6.0f ? 1.0f : 0.0f, 0.0f);
+        g.setColour (playsIn (song.pattern (song.getChainEntry (p))) ? palette::orange : palette::wood.darker (0.3f));
+        g.fillRect (cell);
+        if (p == currentPosition)
+        {
+            g.setColour (palette::cream);
+            g.drawRect (cell, 2.0f);
+        }
+    }
+    g.setColour (palette::brownInk);
+    g.drawRect (map.toFloat(), 1.0f);
+}
+
+void TrackStrip::resized()
+{
+    auto area = getLocalBounds().reduced (4, 4);
+    nameButton.setBounds (area.removeFromLeft (nameWidth));
+    auto controls = area.removeFromRight (controlsWidth);
+    muteButton.setBounds (controls.removeFromLeft (buttonWidth).reduced (2, 0));
+    soloButton.setBounds (controls.removeFromLeft (buttonWidth).reduced (2, 0));
+    const int sliderWidth = controls.getWidth() / 3;
+    volume.setBounds (controls.removeFromLeft (sliderWidth));
+    tune.setBounds (controls.removeFromLeft (sliderWidth));
+    detune.setBounds (controls);
+}
+
 MainComponent::MainComponent()
 {
     juce::String error = deviceManager.initialiseWithDefaultDevices (0, 2);
@@ -290,7 +444,7 @@ MainComponent::MainComponent()
     legendLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (legendLabel);
 
-    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "FX", "CHAIN" };
+    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "FX", "CHAIN", "TRACKS" };
     for (int v = 0; v < numViews; ++v)
     {
         auto& b = viewButtons[(size_t) v];
@@ -392,6 +546,17 @@ MainComponent::MainComponent()
     {
         chainCells[(size_t) c] = std::make_unique<ChainCell> (song, editing, c);
         addChildComponent (*chainCells[(size_t) c]);
+    }
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        auto strip = std::make_unique<TrackStrip> (song, engine.getMixer(), t, [this] (int mixerTrack) { openTrackEditor (mixerTrack); });
+        strip->onAudibilityChange = [this]
+        {
+            for (auto& s : trackStrips)
+                s->repaint();
+        };
+        addChildComponent (*strip);
+        trackStrips[(size_t) t] = std::move (strip);
     }
     chainLengthLabel.setText ("LENGTH", juce::dontSendNotification);
     chainLengthLabel.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
@@ -584,6 +749,7 @@ void MainComponent::showView (View newView)
     for (auto& l : pluckSlotLabels)
         l.setVisible (view == Pluck);
     show (chainCells, view == Chain);
+    show (trackStrips, view == Tracks);
     chainLengthLabel.setVisible (view == Chain);
     chainLengthSlider.setVisible (view == Chain);
     for (auto* k : { &bassCutoff, &bassDecay })
@@ -609,11 +775,27 @@ void MainComponent::showView (View newView)
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click a step: off / normal / ACCENT",
-        "click a position to give it the selected pattern   LENGTH: positions before the loop"
+        "click a position to give it the selected pattern   LENGTH: positions before the loop",
+        "M: mute   S: solo   click a track to edit it   double-click a slider to reset it"
     };
     legendLabel.setText (legends[view], juce::dontSendNotification);
     resized();
     repaint();
+}
+
+void MainComponent::openTrackEditor (int mixerTrack)
+{
+    View target = Drums;
+    if (mixerTrack == drumbox::mixerBass)
+        target = Bass;
+    else if (mixerTrack == drumbox::mixerPad)
+        target = Pad;
+    else if (mixerTrack == drumbox::mixerPluck)
+        target = Pluck;
+    else if (mixerTrack == drumbox::mixerFx)
+        target = Fx;
+    viewButtons[(size_t) target].setToggleState (true, juce::dontSendNotification);
+    showView (target);
 }
 
 void MainComponent::selectPattern (int index)
@@ -678,6 +860,9 @@ void MainComponent::timerCallback()
             chainCells[(size_t) position]->setCurrent (true);
         shownChainPosition = position;
     }
+    if (view == Tracks)
+        for (auto& strip : trackStrips)
+            strip->setCurrentPosition (position);
 }
 
 void MainComponent::paint (juce::Graphics& g)
@@ -716,10 +901,10 @@ void MainComponent::resized()
     auto area = getLocalBounds().reduced (16);
     auto header = area.removeFromTop (54);
     titleLabel.setBounds (header.removeFromLeft (230));
-    auto tabs = header.removeFromRight (numViews * 100 + 12);
+    auto tabs = header.removeFromRight (numViews * 88 + 12);
     for (auto& b : viewButtons)
     {
-        b.setBounds (tabs.removeFromLeft (100).reduced (3, 6));
+        b.setBounds (tabs.removeFromLeft (88).reduced (3, 6));
     }
     legendLabel.setBounds (header);
     area.removeFromTop (16);
@@ -810,6 +995,13 @@ void MainComponent::resized()
         }
         auto knobs = inner.withTrimmedTop (rowHeight * pluckVoices + 12);
         layoutKnobs (knobs.withWidth (juce::jmin (480, knobs.getWidth())), { &pluckCutoff, &pluckDecay, &pluckResonance, &pluckMix });
+    }
+
+    // tracks: twelve strips stacked
+    {
+        const int stripHeight = inner.getHeight() / numMixerTracks;
+        for (int t = 0; t < numMixerTracks; ++t)
+            trackStrips[(size_t) t]->setBounds (inner.getX(), inner.getY() + t * stripHeight, inner.getWidth(), stripHeight);
     }
 
     // chain: 16 positions per row, 8 rows, then the length

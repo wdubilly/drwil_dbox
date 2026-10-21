@@ -4,8 +4,14 @@
 
 namespace drumbox
 {
+namespace
+{
+constexpr float gainStep = 1.0f / 128.0f;
+} // namespace
+
 DrumEngine::DrumEngine()
 {
+    trackGain.fill (1.0f);
     triggers.reserve (256);
     notes.reserve (256);
     prepare (44100.0);
@@ -49,6 +55,24 @@ void DrumEngine::render (float* out, int numSamples)
         currentChainPosition.store (sequencer.getLastChainPosition());
     }
 
+    const bool soloActive = mixer.anySolo();
+    std::array<float, numMixerTracks> target;
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        target[static_cast<size_t> (t)] = mixer.targetGain (t, soloActive);
+        const double ratio = mixer.pitchRatio (t);
+        if (t < mixerDrums)
+            voices.setPitch (t, ratio);
+        else if (t == mixerBass)
+            bass.setPitch (ratio);
+        else if (t == mixerPad)
+            synth.setPitch (ratio);
+        else if (t == mixerPluck)
+            pluck.setPitch (ratio);
+        else
+            fx.setPitch (ratio);
+    }
+
     // triggers and notes are ordered by offset; voices keep ringing after a stop
     size_t next = 0;
     size_t nextNote = 0;
@@ -73,8 +97,17 @@ void DrumEngine::render (float* out, int numSamples)
                 fx.trigger (n.note, gain);
             ++nextNote;
         }
-        const float mix = voices.next() * 0.6f + bass.next (bassParams) * bassLevel + synth.next (synthParams) * synthLevel
-                           + pluck.next (pluckParams) * pluckLevel + fx.next() * fxLevel;
+        // gains glide to their target in about 3 ms, so a mute or a solo does not click
+        for (size_t t = 0; t < trackGain.size(); ++t)
+            trackGain[t] += std::clamp (target[t] - trackGain[t], -gainStep, gainStep);
+
+        std::array<float, mixerDrums> drumOut;
+        voices.next (drumOut);
+        float mix = 0.0f;
+        for (size_t d = 0; d < drumOut.size(); ++d)
+            mix += drumOut[d] * 0.6f * trackGain[d];
+        mix += bass.next (bassParams) * bassLevel * trackGain[mixerBass] + synth.next (synthParams) * synthLevel * trackGain[mixerPad]
+               + pluck.next (pluckParams) * pluckLevel * trackGain[mixerPluck] + fx.next() * fxLevel * trackGain[mixerFx];
         out[i] = std::clamp (mix, -1.0f, 1.0f);
     }
 }

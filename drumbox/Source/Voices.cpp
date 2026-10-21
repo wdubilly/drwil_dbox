@@ -43,7 +43,8 @@ float Voice::next() noexcept
     if (! active)
         return 0.0f;
 
-    const double dt = 1.0 / sampleRate;
+    const double timeStep = 1.0 / sampleRate;
+    const double dt = timeStep * pitch;
     float out = 0.0f;
     float envelope = 0.0f;
     double length = 0.5;
@@ -91,8 +92,9 @@ float Voice::next() noexcept
             const double t = std::fmod (time, 0.011);
             const float burst = time < 0.033 ? decay (t, 0.009) : decay (time - 0.033, 0.16);
             const float n = noise();
-            bandState1 += 0.45f * (n - bandState1);
-            bandState2 += 0.12f * (bandState1 - bandState2);
+            const float p = static_cast<float> (pitch);
+            bandState1 += std::min (0.95f, 0.45f * p) * (n - bandState1);
+            bandState2 += std::min (0.95f, 0.12f * p) * (bandState1 - bandState2);
             out = 2.2f * (bandState1 - bandState2) * burst;
             length = 0.3;
             break;
@@ -125,7 +127,7 @@ float Voice::next() noexcept
         }
     }
 
-    time += dt;
+    time += timeStep;
     if (time > length)
     {
         active = false;
@@ -162,7 +164,8 @@ float FxVoice::next() noexcept
     if (! active)
         return 0.0f;
 
-    const double dt = 1.0 / sampleRate;
+    const double timeStep = 1.0 / sampleRate;
+    const double dt = timeStep * pitch;
     float out = 0.0f;
     double length = 0.5;
 
@@ -226,7 +229,7 @@ float FxVoice::next() noexcept
         }
     }
 
-    time += dt;
+    time += timeStep;
     if (time > length)
         active = false;
     return out * gain;
@@ -242,6 +245,12 @@ void FxBank::trigger (int sound, float gain) noexcept
 {
     if (sound >= 0 && sound < numFxSounds)
         voices[static_cast<size_t> (sound)].trigger (gain);
+}
+
+void FxBank::setPitch (double ratio) noexcept
+{
+    for (auto& v : voices)
+        v.setPitch (ratio);
 }
 
 float FxBank::next() noexcept
@@ -268,6 +277,18 @@ void VoiceBank::trigger (int track, float gain) noexcept
         voices[OpenHat].choke();
 
     voices[static_cast<size_t> (track)].trigger (gain);
+}
+
+void VoiceBank::setPitch (int track, double ratio) noexcept
+{
+    if (track >= 0 && track < 8)
+        voices[static_cast<size_t> (track)].setPitch (ratio);
+}
+
+void VoiceBank::next (std::array<float, 8>& out) noexcept
+{
+    for (size_t i = 0; i < voices.size(); ++i)
+        out[i] = voices[i].next();
 }
 
 float VoiceBank::next() noexcept

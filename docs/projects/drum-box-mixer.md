@@ -1,6 +1,6 @@
 # Project: Drum box, track view, mute, solo, volume and tuning
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: 2026-10-22 — increment 1 done (mixer in the engine, `DBX-011`, `DBX-012`, `DBX-029` tested); increment 2 built (TRACKS view, Linux app builds), waiting for the CI Windows build and the human attestation of `DBX-013`.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/track-view-mixer.md`
@@ -65,6 +65,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Engine in `drumbox/Source/` (`DrumEngine.*` mixes the voices), UI in `MainComponent.*` with views DRUMS, BASS, PAD, PLUCK, FX and CHAIN (after the pluck and FX workstreams).
+- **Last state** (2026-10-22): engine mixer in `drumbox/Source/Mixer.h` and `DrumEngine.cpp` (per-track mute, solo, volume, tune, detune; gains glide in ~3 ms); `DBX-001` to `DBX-005`, `DBX-007` to `DBX-009`, `DBX-011`, `DBX-012`, `DBX-026`, `DBX-027`, `DBX-029` to `DBX-031` pass locally. TRACKS view (`TrackStrip` in `MainComponent.*`, twelve stacked strips, click a track or its chain map to open its editor); the Linux app builds. Known limit: the rim's noise component does not follow the tune (its two tones do).
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [human] try the app (Windows exe from the CI run of branch `workstream/drum-box-mixer`) and attest `DBX-013` (`drwil attest`); then close the workstream (journal entry, `node .githooks/close.mjs`).

@@ -26,6 +26,7 @@ public:
     void prepare (double newSampleRate, Track newTrack) noexcept;
     void trigger (float gain) noexcept;
     void choke() noexcept { level = 0.0f; active = false; }
+    void setPitch (double ratio) noexcept { pitch = ratio; }
     bool isActive() const noexcept { return active; }
     float next() noexcept;
 
@@ -35,6 +36,7 @@ private:
 
     Track track = Kick;
     double sampleRate = 44100.0;
+    double pitch = 1.0; // frequency ratio from the track tune
     bool active = false;
     float level = 0.0f;
     float gain = 1.0f;
@@ -65,6 +67,7 @@ public:
     void prepare (double newSampleRate, FxSound newSound) noexcept;
     void trigger (float gain) noexcept;
     bool isActive() const noexcept { return active; }
+    void setPitch (double ratio) noexcept { pitch = ratio; }
     float next() noexcept;
 
 private:
@@ -72,6 +75,7 @@ private:
 
     FxSound sound = Siren;
     double sampleRate = 44100.0;
+    double pitch = 1.0;
     bool active = false;
     float gain = 1.0f;
     std::uint32_t seed = 33333u;
@@ -85,6 +89,7 @@ class FxBank
 public:
     void prepare (double sampleRate) noexcept;
     void trigger (int sound, float gain) noexcept;
+    void setPitch (double ratio) noexcept;
     float next() noexcept;
 
 private:
@@ -96,6 +101,9 @@ class VoiceBank
 public:
     void prepare (double sampleRate) noexcept;
     void trigger (int track, float gain) noexcept;
+    void setPitch (int track, double ratio) noexcept;
+    // One output per drum track, so each can be mixed on its own.
+    void next (std::array<float, 8>& out) noexcept;
     float next() noexcept;
 
 private:

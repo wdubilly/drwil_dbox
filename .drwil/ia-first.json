@@ -140,6 +140,33 @@
         "drumbox/**",
         ".drwil/ia-first.json"
       ]
+    },
+    {
+      "id": "dbx-011",
+      "name": "DBX-011 mute and solo",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-011$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-012",
+      "name": "DBX-012 volume per track",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-012$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-029",
+      "name": "DBX-029 tune and detune per track",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-029$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
     }
   ],
   "scopeReminder": "blocking",

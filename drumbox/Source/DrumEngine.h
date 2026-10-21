@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Instruments.h"
+#include "Mixer.h"
 #include "Pattern.h"
 #include "Sequencer.h"
 #include "Voices.h"
 
+#include <array>
 #include <atomic>
 #include <vector>
 
@@ -34,6 +36,8 @@ public:
     SynthParams& getSynthParams() noexcept { return synthParams; }
     PluckParams& getPluckParams() noexcept { return pluckParams; }
 
+    Mixer& getMixer() noexcept { return mixer; }
+
     void setTempo (double bpm) noexcept { tempoRequest.store (bpm); }
     void setSwing (double percent) noexcept { swingRequest.store (percent); }
     void setPlaying (bool shouldPlay) noexcept { playRequest.store (shouldPlay); }
@@ -55,6 +59,8 @@ private:
     BassVoice bass;
     PolySynth synth;
     PluckSynth pluck;
+    Mixer mixer;
+    std::array<float, numMixerTracks> trackGain;
     BassParams bassParams;
     SynthParams synthParams;
     PluckParams pluckParams;

@@ -46,12 +46,14 @@ public:
     void prepare (double newSampleRate) noexcept;
     void noteOn (int note, float gain, int gateSamples) noexcept;
     bool isActive() const noexcept { return envelope.isActive(); }
+    void setPitch (double ratio) noexcept { pitch = ratio; }
     float next (const BassParams& params) noexcept;
 
 private:
     double sampleRate = 44100.0;
     Envelope envelope;
     double frequency = 55.0;
+    double pitch = 1.0; // frequency ratio from the track tune
     double phase = 0.0;
     float gain = 1.0f;
     float low = 0.0f, band = 0.0f;
@@ -80,6 +82,7 @@ public:
     void prepare (double newSampleRate) noexcept;
     void noteOn (int note, float gain, int gateSamples) noexcept;
     int activeVoices() const noexcept;
+    void setPitch (double ratio) noexcept { pitch = ratio; }
     float next (const SynthParams& params) noexcept;
 
 private:
@@ -96,6 +99,7 @@ private:
     double sampleRate = 44100.0;
     std::array<Voice, synthVoices> voices;
     double lfoPhase = 0.0;
+    double pitch = 1.0;
     std::uint64_t counter = 0;
 };
 // Plucked sounds: four voices with an instant attack, a short decay and a filter that
@@ -114,6 +118,7 @@ public:
     void prepare (double newSampleRate) noexcept;
     void noteOn (int note, float gain, int gateSamples) noexcept;
     int activeVoices() const noexcept;
+    void setPitch (double ratio) noexcept { pitch = ratio; }
     float next (const PluckParams& params) noexcept;
 
 private:
@@ -129,6 +134,7 @@ private:
 
     double sampleRate = 44100.0;
     std::array<Voice, pluckVoices> voices;
+    double pitch = 1.0;
     std::uint64_t counter = 0;
 };
 } // namespace drumbox
