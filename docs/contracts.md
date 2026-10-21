@@ -225,6 +225,15 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-song — « The synth is a four-voice polyphonic voice (two oscillators, filter, envelope, LFO) playing the notes set on its steps »
 
+## DBX-010 — The bass, synth and chain editors are easy to use and keep the 70's funk feel
+**Rule** : The standalone window lets the user edit the bass line and the synth step by step (note on/off, pitch by drag or wheel, accent), choose among the 16 patterns, and build the chain (a position grid and its length), while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the editors are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the bass, synth, pattern bank and chain editors are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-song — « The interface lets the user edit the bass and the synth, build the chain, and stays easy to use with the 70's funk feel »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |
