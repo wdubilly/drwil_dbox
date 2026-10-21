@@ -263,6 +263,35 @@ contracts » section).
 **Manual** : the human tries the app and attests that the PAD view and the PLUCK view are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-pluck — « The interface shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes and sound, and stays easy to use with the 70's funk feel »
 
+## DBX-030 — The FX track has six distinct synthesised sounds, each producing sound when triggered
+**Rule** : The FX track holds six sounds, one step row each: siren (pitch sweeping up then down), laser (fast falling pitch), riser (noise rising in loudness and brightness), impact (low thump with a noise burst), whoosh (short white noise) and scratch (a saw dragged back and forth); each produces a finite, bounded sound that ends, any two differ in waveform, zero-crossing rate or length, an off step is silent and an accented hit is at least 1.3 times the peak of a normal one. The sound of the drums, the bass, the pad and the pluck is unchanged by the FX.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Voices.cpp`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-030` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : sirens and other noises are the colour of a funk break: each must be told apart by ear, with no sample file, and must not disturb the other tracks
+**Check** : `dbx-030`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-fx — « The FX track has six distinct synthesised sounds — siren, laser, riser, impact, whoosh and scratch — each producing sound when triggered »
+
+## DBX-031 — Each pattern holds FX steps and the chain plays them in time
+**Rule** : Each of the 16 patterns holds its own FX steps (six rows of 16 steps, each off, normal or accent, as for the drums) next to its drums, bass, pad and pluck; the sequencer plays them with the pattern chain, one after the other in time (within one sample, independent of the audio block size) and then loops, as it does for the other tracks. The FX steps add no drum trigger.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Pattern.h`, `drumbox/Source/Sequencer.cpp`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-031` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a song needs its effects to change from pattern to pattern, in time with the rest
+**Check** : `dbx-031`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-fx — « Each pattern holds the FX steps next to the other tracks, and the pattern chain plays them in time »
+
+## DBX-032 — The FX view is easy to use and keeps the 70's funk feel
+**Rule** : The standalone window offers an FX view with the six step rows (siren, laser, riser, impact, whoosh, scratch; click a step: off, normal, accent), while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the editors are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the FX view is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-fx — « The interface offers an FX view with the six step rows, and stays easy to use with the 70's funk feel »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

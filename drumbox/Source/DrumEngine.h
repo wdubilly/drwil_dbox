@@ -15,6 +15,7 @@ constexpr float accentGain = 1.0f;
 constexpr float bassLevel = 0.5f;
 constexpr float synthLevel = 0.5f;
 constexpr float pluckLevel = 0.5f;
+constexpr float fxLevel = 0.6f;
 
 // Everything the audio callback needs, with no dependency on JUCE or on a device.
 // Setters may be called from the UI thread; render() runs on the audio thread.
@@ -50,6 +51,7 @@ private:
     Song song;
     Sequencer sequencer;
     VoiceBank voices;
+    FxBank fx;
     BassVoice bass;
     PolySynth synth;
     PluckSynth pluck;

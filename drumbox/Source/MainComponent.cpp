@@ -4,10 +4,10 @@
 
 using namespace drumbox;
 
-StepButton::StepButton (Song& songToEdit, const int& editedPattern, int trackIndex, int stepIndex)
-    : juce::Button ({}), song (songToEdit), editing (editedPattern), track (trackIndex), step (stepIndex)
+StepButton::StepButton (Song& songToEdit, const int& editedPattern, int trackIndex, int stepIndex, bool isFxRow)
+    : juce::Button ({}), song (songToEdit), editing (editedPattern), track (trackIndex), step (stepIndex), fx (isFxRow)
 {
-    setTitle (juce::String (trackNames[(size_t) trackIndex]) + " step " + juce::String (stepIndex + 1));
+    setTitle (juce::String (fx ? fxNames[(size_t) trackIndex] : trackNames[(size_t) trackIndex]) + " step " + juce::String (stepIndex + 1));
     setMouseCursor (juce::MouseCursor::PointingHandCursor);
 }
 
@@ -22,13 +22,16 @@ void StepButton::setCurrent (bool isCurrent)
 
 void StepButton::clicked()
 {
-    pattern().cycle (track, step);
+    if (fx)
+        pattern().cycleFx (track, step);
+    else
+        pattern().cycle (track, step);
     repaint();
 }
 
 void StepButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
 {
-    const auto state = pattern().get (track, step);
+    const auto state = fx ? pattern().getFx (track, step) : pattern().get (track, step);
     auto area = getLocalBounds().toFloat().reduced (2.5f);
     const bool beatGroup = (step / 4) % 2 == 0;
 
@@ -287,7 +290,7 @@ MainComponent::MainComponent()
     legendLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (legendLabel);
 
-    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "CHAIN" };
+    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "FX", "CHAIN" };
     for (int v = 0; v < numViews; ++v)
     {
         auto& b = viewButtons[(size_t) v];
@@ -328,6 +331,22 @@ MainComponent::MainComponent()
             auto button = std::make_unique<StepButton> (song, editing, t, s);
             addChildComponent (*button);
             steps[(size_t) (t * numSteps + s)] = std::move (button);
+        }
+    }
+
+    for (int r = 0; r < numFxRows; ++r)
+    {
+        auto& label = fxLabels[(size_t) r];
+        label.setText (fxNames[(size_t) r], juce::dontSendNotification);
+        label.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
+        label.setColour (juce::Label::textColourId, palette::cream);
+        addChildComponent (label);
+
+        for (int s = 0; s < numSteps; ++s)
+        {
+            auto button = std::make_unique<StepButton> (song, editing, r, s, true);
+            addChildComponent (*button);
+            fxSteps[(size_t) (r * numSteps + s)] = std::move (button);
         }
     }
 
@@ -553,6 +572,9 @@ void MainComponent::showView (View newView)
     show (steps, view == Drums);
     for (auto& l : trackLabels)
         l.setVisible (view == Drums);
+    show (fxSteps, view == Fx);
+    for (auto& l : fxLabels)
+        l.setVisible (view == Fx);
     show (bassSteps, view == Bass);
     bassLabel.setVisible (view == Bass);
     show (synthSteps, view == Pad);
@@ -586,6 +608,7 @@ void MainComponent::showView (View newView)
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
+        "click a step: off / normal / ACCENT",
         "click a position to give it the selected pattern   LENGTH: positions before the loop"
     };
     legendLabel.setText (legends[view], juce::dontSendNotification);
@@ -633,6 +656,8 @@ void MainComponent::timerCallback()
                 return;
             for (int t = 0; t < numTracks; ++t)
                 steps[(size_t) (t * numSteps + step)]->setCurrent (on && current >= 0);
+            for (int r = 0; r < numFxRows; ++r)
+                fxSteps[(size_t) (r * numSteps + step)]->setCurrent (on && current >= 0);
             bassSteps[(size_t) step]->setCurrent (on && current >= 0);
             for (int v = 0; v < synthVoices; ++v)
                 synthSteps[(size_t) (v * numSteps + step)]->setCurrent (on && current >= 0);
@@ -733,6 +758,18 @@ void MainComponent::resized()
             trackLabels[(size_t) t].setBounds (inner.getX(), y, labelWidth, rowHeight);
             for (int s = 0; s < numSteps; ++s)
                 steps[(size_t) (t * numSteps + s)]->setBounds (inner.getX() + labelWidth + s * cellWidth, y, cellWidth, rowHeight);
+        }
+    }
+
+    // FX: six rows
+    {
+        const int rowHeight = juce::jmin (inner.getHeight() / numFxRows, 90);
+        for (int r = 0; r < numFxRows; ++r)
+        {
+            const int y = inner.getY() + r * rowHeight;
+            fxLabels[(size_t) r].setBounds (inner.getX(), y, labelWidth, rowHeight);
+            for (int s = 0; s < numSteps; ++s)
+                fxSteps[(size_t) (r * numSteps + s)]->setBounds (inner.getX() + labelWidth + s * cellWidth, y, cellWidth, rowHeight);
         }
     }
 

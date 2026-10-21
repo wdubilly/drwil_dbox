@@ -1,6 +1,6 @@
 # Project: Drum box, sound effects track
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: increments 1 to 3 built on 2026-10-21 (`DBX-030`, `DBX-031` checks pass, FX view built); `DBX-032` waits for the human attestation.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: none (requested in conversation, framed directly)
@@ -62,6 +62,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Second of the queue: pluck, FX, then mixer, effects, songs, editing.
+- **Last state** (2026-10-21): FX engine (six voices, FX rows in each pattern, played by the chain) and FX view done on branch `workstream/drum-box-fx`; `DBX-030` and `DBX-031` tests pass, `DBX-001` to `DBX-010` and `DBX-026` to `DBX-028` still pass; the Linux app builds. Not closed.
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [human] try the FX view in the app (Windows `.exe` from the CI run) and attest `DBX-032` (`drwil attest`); then the agent closes the workstream (journal, `node .githooks/close.mjs`).

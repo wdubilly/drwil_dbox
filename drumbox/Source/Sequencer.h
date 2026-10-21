@@ -18,7 +18,8 @@ enum class Instrument : int
 {
     Bass = 0,
     Synth,
-    Pluck
+    Pluck,
+    Fx // note holds the FX row, not a pitch
 };
 
 struct NoteEvent
@@ -55,7 +56,7 @@ public:
 
     // Appends the triggers falling inside the next numSamples and advances the clock.
     void process (const Pattern& pattern, int numSamples, std::vector<Trigger>& out);
-    // Same, also appending the bass, synth and pluck notes; one pattern played alone.
+    // Same, also appending the bass, synth, pluck and FX events; one pattern played alone.
     void process (const Pattern& pattern, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>& notes);
     // Plays the patterns of the song in chain order, then loops.
     void process (const Song& song, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>& notes);
