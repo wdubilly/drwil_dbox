@@ -25,7 +25,6 @@ otherwise.
 
 ## Projects
 
-- [ ] [decision] [P1] Drum box, bass line, synth and pattern chain: `docs/projects/drum-box-song.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines
