@@ -1,6 +1,6 @@
 # Intent: Save songs and export to WAV
 
-**Status**: proposed on 2026-10-21.
+**Status**: scoped on 2026-10-21 into `docs/projects/drum-box-songs.md`; the intent is removed at the workstream's closing.
 
 ## Need
 
