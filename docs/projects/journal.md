@@ -19,7 +19,7 @@ Delivered a JUCE/C++ standalone drum machine with a 70's funk look: 16-step sequ
 
 ## Drum box, bass line, synth and pattern chain — closed 2026-10-21
 
-Extended the standalone drum box: a bank of 16 patterns (drums, bass and synth together) chained over up to 128 positions and looped (`DBX-007`), a monophonic synthesised bass with one pitch per step (`DBX-008`), a four-voice polyphonic synth with two oscillators, filter, envelope and LFO (`DBX-009`), and DRUMS, BASS, SYNTH and CHAIN views in the funk look, attested by the human (`DBX-010`). `DBX-001` to `DBX-005` kept passing unchanged. Windows and Linux only; the Windows `.exe` comes from the CI artifact. Limits, now in `docs/intentions/pattern-editing.md`: no pattern copy in the interface, a jump when the chain length changes during playback, step-by-step entry only (piano roll later). Full text: the git history of the brief (`git log --follow`).
+Extended the standalone drum box: a bank of 16 patterns (drums, bass and synth together) chained over up to 128 positions and looped (`DBX-007`), a monophonic synthesised bass with one pitch per step (`DBX-008`), a four-voice polyphonic synth with two oscillators, filter, envelope and LFO (`DBX-009`), and DRUMS, BASS, SYNTH and CHAIN views in the funk look, attested by the human (`DBX-010`). `DBX-001` to `DBX-005` kept passing unchanged. Windows and Linux only; the Windows `.exe` comes from the CI artifact. Limits, later covered by the pattern editing workstream: no pattern copy in the interface, a jump when the chain length changes during playback, step-by-step entry only (piano roll later). Full text: the git history of the brief (`git log --follow`).
 
 ## Drum box, pluck synth track — closed 2026-10-21
 
