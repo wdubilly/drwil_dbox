@@ -19,7 +19,7 @@ files:
 
 Make building songs more comfortable: copy, paste, clear and swap patterns,
 a chain whose length can change while playing without surprises, and a piano
-roll for the bass and the synth next to the step-by-step entry. Windows and
+roll for the bass, the pad and the pluck next to the step-by-step entry. Windows and
 Linux only.
 
 ## Acceptance criteria
@@ -47,7 +47,7 @@ import, saving (done with the songs brief), macOS.
 - 2026-10-21: platforms for now are Windows and Linux only, approved by the requester.
 - 2026-10-21: operations are copy, paste, clear and swap, approved by the requester.
 - 2026-10-21: a chain length change applies at once, approved by the requester.
-- 2026-10-21: piano roll for the bass and the synth, the step-by-step entry kept, approved by the requester.
+- 2026-10-21: piano roll for the bass, the pad and the pluck, the step-by-step entry kept, approved by the requester.
 - 2026-10-21: the workstream comes last in the queue, after the songs workstream, approved by the requester.
 - 2026-10-21: when the position falls outside the new chain length, playback returns to the first position: the agent's proposal, judged under `DBX-023`.
 - 2026-10-21: the agent proposes the piano roll layout in the existing 70's funk style, judged by the requester under `DBX-025`.
@@ -60,7 +60,7 @@ None open.
 
 - **Increment 1 — pattern operations** [AI]: copy, paste, clear, swap. Exit criterion: `DBX-022` tests pass.
 - **Increment 2 — chain length change** [AI]: apply a new length at once during playback. Exit criterion: `DBX-023` tests pass.
-- **Increment 3 — piano roll** [AI]: note entry grid for the bass and the synth writing the pattern data. Exit criterion: `DBX-024` tests pass.
+- **Increment 3 — piano roll** [AI]: note entry grid for the bass, the pad and the pluck writing the pattern data. Exit criterion: `DBX-024` tests pass.
 - **Increment 4 — interface** [AI]: pattern operation buttons and piano roll view, in the funk style. Exit criterion: the app builds on Linux and in the Windows CI job; `DBX-025` attested by the human.
 
 ## 7. Hand-off

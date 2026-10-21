@@ -18,7 +18,7 @@ files:
 ## 1. Need
 
 Let the user mix what they hear and see the whole song at a glance: mute or
-solo any of the ten tracks (the eight drums, the bass, the synth), set a
+solo any of the eleven tracks (the eight drums, the bass, the pad, the pluck), set a
 volume per track, and see every track stacked one above the other in a track
 view. Windows and Linux only.
 
@@ -26,7 +26,7 @@ view. Windows and Linux only.
 
 - A muted track is silent; with one or several tracks in solo, only those tracks are heard; with none in solo, all unmuted tracks are heard — `DBX-011`
 - Each track has its own volume: a lower volume makes that track quieter and leaves the others unchanged — `DBX-012`
-- A TRACKS view stacks the eight drums, the bass and the synth one above the other, with mute, solo and volume on each, and clicking a track opens its editor [human] — `DBX-013`
+- A TRACKS view stacks the eight drums, the bass, the pad and the pluck one above the other, with mute, solo and volume on each, and clicking a track opens its editor [human] — `DBX-013`
 
 ## 2. Out of scope
 
@@ -59,10 +59,10 @@ None open.
 ## 6. Increments
 
 - **Increment 1 — mixer in the engine** [AI]: mute, solo and volume per track applied when mixing. Exit criterion: `DBX-011` and `DBX-012` tests pass and `DBX-001` to `DBX-010` still pass.
-- **Increment 2 — TRACKS view** [AI]: ten stacked tracks with the pattern chain, mute, solo, volume and a click to open the track's editor, in the funk style. Exit criterion: the app builds on Linux and in the Windows CI job; `DBX-013` attested by the human.
+- **Increment 2 — TRACKS view** [AI]: eleven stacked tracks with the pattern chain, mute, solo, volume and a click to open the track's editor, in the funk style. Exit criterion: the app builds on Linux and in the Windows CI job; `DBX-013` attested by the human.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. Engine in `drumbox/Source/` (`DrumEngine.*` mixes the voices), UI in `MainComponent.*` with views DRUMS, BASS, SYNTH and CHAIN.
+- **Last state** (2026-10-21): scoped, not started. Engine in `drumbox/Source/` (`DrumEngine.*` mixes the voices), UI in `MainComponent.*` with views DRUMS, BASS, PAD, PLUCK and CHAIN (after the pluck workstream).
 - **Uncommitted work**: none once committed.
 - **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
