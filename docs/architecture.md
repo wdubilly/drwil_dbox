@@ -17,6 +17,7 @@ Two parts inside `drumbox/`, kept apart so the logic is testable with no audio d
 - Engine (pure C++, no JUCE): `drumbox/Source/Pattern.h` — the 16×8 step grid (off/normal/accent); `drumbox/Source/Sequencer.h` and `drumbox/Source/Sequencer.cpp` — clock, tempo, swing; `drumbox/Source/Voices.h` and `drumbox/Source/Voices.cpp` — the eight synthesised voices; `drumbox/Source/DrumEngine.h` and `drumbox/Source/DrumEngine.cpp` — what the audio callback runs. Built as the static library `drumbox_engine`.
 - Standalone app (JUCE): `drumbox/Source/Main.cpp` — application and window; `drumbox/Source/MainComponent.h` and `drumbox/Source/MainComponent.cpp` — step grid, transport, tempo and swing knobs, audio device; `drumbox/Source/FunkLookAndFeel.h` and `drumbox/Source/FunkLookAndFeel.cpp` — the 70's funk look.
 - `drumbox/CMakeLists.txt` — build; `drumbox/tests/EngineTests.cpp` — plain C++ tests, run through CTest (a test name starts with its contract ID, `DBX-001` to `DBX-005`).
+- `.github/workflows/` — GitHub CI: `.github/workflows/ia-first.yml` runs the repository checks on Linux and builds the Windows standalone app, uploading the `.exe` as an artifact.
 
 Build and test: `cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine` (engine only); without `-DDRUMBOX_BUILD_APP=OFF` the JUCE app is built too. The same commands are declared as checks in `.drwil/ia-first.json`.
 

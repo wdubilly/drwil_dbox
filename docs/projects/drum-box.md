@@ -13,6 +13,8 @@ files:
   - .drwil/ia-first.json
   - docs/contracts.md
   - docs/architecture.md
+  - .github/workflows/*
+  - .drwil/ia-first.json
 -->
 
 ## 1. Need
@@ -33,7 +35,7 @@ come later (see the intent).
 ## 2. Out of scope
 
 Plugin formats (VST3, AU, CLAP), sample loading, pattern saving, audio and
-MIDI export, separate outputs, tracks beyond eight, CI for three platforms.
+MIDI export, separate outputs, tracks beyond eight, CI for macOS.
 
 ## 3. Constraints
 
@@ -48,6 +50,7 @@ MIDI export, separate outputs, tracks beyond eight, CI for three platforms.
 - 2026-10-21: licence GPL, chosen by the requester.
 - 2026-10-21: the agent proposes the 70's funk palette and layout, judged by the requester under `DBX-006`.
 - 2026-10-21: first slice as listed above, approved by the requester.
+- 2026-10-21: a GitHub CI is added (Linux checks and a Windows build publishing the `.exe` as an artifact), approved by the requester; it also lets `QUA-013` pass.
 
 ## 5. Points to decide
 
@@ -58,6 +61,7 @@ None open.
 - **Increment 1 — project skeleton** [AI]: CMake and JUCE standalone app opening an empty window; lint and test commands declared in `.drwil/ia-first.json`. Exit criterion: build and tests pass.
 - **Increment 2 — sequencer and synthesis** [AI]: step engine with tempo, swing, accents; eight synthesised voices. Exit criterion: `DBX-001` to `DBX-004` tests pass.
 - **Increment 3 — interface** [AI]: 16-step grid, transport, tempo and swing controls, funk styling. Exit criterion: `DBX-005` passes, `DBX-006` attested by the human.
+- **Increment 4 — GitHub CI** [AI]: `.github/workflows/` generated with `npx drwil init --ci github`, plus a Windows job building the standalone app and uploading the `.exe`; `ci` set in `.drwil/ia-first.json`. Exit criterion: `QUA-013` no longer reports `ci-coverage` as not run; workflow runs green on GitHub once pushed.
 
 ## 7. Hand-off
 

@@ -14,7 +14,7 @@
     "gemini",
     "copilot"
   ],
-  "ci": "none",
+  "ci": "github",
   "dirs": {
     "projects": "docs/projects",
     "intentions": "docs/intentions",
@@ -98,6 +98,8 @@
   "extraCodeGlobs": [
     "docker-compose*.yml"
   ],
-  "ciFiles": [],
+  "ciFiles": [
+    ".github/workflows/ia-first.yml"
+  ],
   "mode": "full"
 }
