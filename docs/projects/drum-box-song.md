@@ -1,6 +1,6 @@
 # Project: Drum box, bass line, synth and pattern chain
 
-**Status**: 2026-10-21 — increments 1 to 4 built (chain, bass, synth, interface); `DBX-007` to `DBX-009` tests pass; `DBX-010` waits for the human's attestation.
+**Status**: 2026-10-21 — increments 1 to 4 built (chain, bass, synth, interface); `DBX-007` to `DBX-009` tests pass and `DBX-010` attested by the human; ready to close.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/bass-synth-song.md`
@@ -69,4 +69,4 @@ None open.
 
 - **Last state** (2026-10-21): all four increments built. UI (`MainComponent.*`): views DRUMS, BASS, SYNTH and CHAIN, pattern bank (16 buttons), bass and synth knobs, starter song (patterns 1 and 2, chain 1-1-2-1). The window could not be viewed on the build machine (no display): look and ergonomics are for the human.
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] try the app (`drumbox/build/app/DrumBox_artefacts/Release/Drum Box`) and run `drwil attest` for `DBX-010`; then close the workstream.
+- **Next step**: [AI] close the workstream (journal, closing commit, PR).

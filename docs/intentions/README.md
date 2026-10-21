@@ -22,6 +22,7 @@ removes it when fully covered.
 |---|---|
 | [drum-box](drum-box.md) | Retro 70's funk drum machine, plugin + standalone (JUCE) |
 | [bass-synth-song](bass-synth-song.md) | Bass line, synth and longer sequences (chained patterns) |
+| [pattern-editing](pattern-editing.md) | Pattern copy, piano roll, predictable chain edits |
 
 A one-line idea, too light for a brief, is noted with one command:
 `node .githooks/note.mjs "<text>"` appends a dated line to
