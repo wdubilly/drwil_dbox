@@ -25,7 +25,6 @@ otherwise.
 
 ## Projects
 
-- [ ] [decision] [P1] Drum box, pattern editing and piano roll: `docs/projects/drum-box-editing.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines

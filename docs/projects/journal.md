@@ -19,7 +19,7 @@ Delivered a JUCE/C++ standalone drum machine with a 70's funk look: 16-step sequ
 
 ## Drum box, bass line, synth and pattern chain — closed 2026-10-21
 
-Extended the standalone drum box: a bank of 16 patterns (drums, bass and synth together) chained over up to 128 positions and looped (`DBX-007`), a monophonic synthesised bass with one pitch per step (`DBX-008`), a four-voice polyphonic synth with two oscillators, filter, envelope and LFO (`DBX-009`), and DRUMS, BASS, SYNTH and CHAIN views in the funk look, attested by the human (`DBX-010`). `DBX-001` to `DBX-005` kept passing unchanged. Windows and Linux only; the Windows `.exe` comes from the CI artifact. Limits, now in `docs/intentions/pattern-editing.md`: no pattern copy in the interface, a jump when the chain length changes during playback, step-by-step entry only (piano roll later). Full text: the git history of the brief (`git log --follow`).
+Extended the standalone drum box: a bank of 16 patterns (drums, bass and synth together) chained over up to 128 positions and looped (`DBX-007`), a monophonic synthesised bass with one pitch per step (`DBX-008`), a four-voice polyphonic synth with two oscillators, filter, envelope and LFO (`DBX-009`), and DRUMS, BASS, SYNTH and CHAIN views in the funk look, attested by the human (`DBX-010`). `DBX-001` to `DBX-005` kept passing unchanged. Windows and Linux only; the Windows `.exe` comes from the CI artifact. Limits, later covered by the pattern editing workstream: no pattern copy in the interface, a jump when the chain length changes during playback, step-by-step entry only (piano roll later). Full text: the git history of the brief (`git log --follow`).
 
 ## Drum box, pluck synth track — closed 2026-10-21
 
@@ -40,3 +40,7 @@ Added five effects (distortion, chorus, compressor, delay, reverb) on a master c
 ## Drum box, save songs and export to WAV — closed 2026-10-22
 
 Added `.dbox` JSON song files that hold tempo, swing, the 16 patterns, the chain, the instrument settings, the mixer and the master effects, validated in full before anything is applied (`DBX-018`), an offline WAV export of the mix in 24 bits at 44.1 kHz with the effect tails and mute and solo applied (`DBX-019`), per-track stems (`DBX-020`), and OPEN, SAVE, EXPORT WAV and EXPORT STEMS buttons with shortcuts, attested by the human (`DBX-021`). Windows and Linux only. Limits: the engine is mono so stereo files carry the same signal on both channels; stems add up exactly to the mix only without effects; a very resonant delay tail is cut at 60 s without a fade; no warning on unsaved changes. Full text: the git history of the brief (`git log --follow`).
+
+## Drum box, pattern editing and piano roll — closed 2026-10-22
+
+Added copy, paste, clear and swap of patterns (`DBX-022`), a chain length that can change during playback, returning to the first position when the current one falls outside, without losing the beat (`DBX-023`), a piano roll for the bass, pad and pluck that writes into the existing pattern data and keeps step entry (`DBX-024`), and COPY, PASTE, CLEAR, SWAP and PIANO ROLL controls in the interface, attested by the human (`DBX-025`). Windows and Linux only. Limits: CLEAR has no undo, only a confirmation. Full text: the git history of the brief (`git log --follow`).
