@@ -1,6 +1,6 @@
 # Project: Drum box, sound effects track
 
-**Status**: increments 1 to 3 built on 2026-10-21 (`DBX-030`, `DBX-031` checks pass, FX view built); `DBX-032` waits for the human attestation.
+**Status**: increments 1 to 3 built on 2026-10-21 (`DBX-030`, `DBX-031` checks pass, FX view built); `DBX-032` attested by the human on 2026-10-22; ready to close.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: none (requested in conversation, framed directly)
@@ -62,6 +62,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): FX engine (six voices, FX rows in each pattern, played by the chain) and FX view done on branch `workstream/drum-box-fx`; `DBX-030` and `DBX-031` tests pass, `DBX-001` to `DBX-010` and `DBX-026` to `DBX-028` still pass; the Linux app builds. Not closed.
+- **Last state** (2026-10-21): FX engine (six voices, FX rows in each pattern, played by the chain) and FX view done on branch `workstream/drum-box-fx`; `DBX-030` and `DBX-031` tests pass, `DBX-001` to `DBX-010` and `DBX-026` to `DBX-028` still pass; the Linux app builds. `DBX-032` attested (2026-10-22).
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] try the FX view in the app (Windows `.exe` from the CI run) and attest `DBX-032` (`drwil attest`); then the agent closes the workstream (journal, `node .githooks/close.mjs`).
+- **Next step**: [agent] close the workstream (journal, `node .githooks/close.mjs`).

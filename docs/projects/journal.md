@@ -24,3 +24,7 @@ Extended the standalone drum box: a bank of 16 patterns (drums, bass and synth t
 ## Drum box, pluck synth track — closed 2026-10-21
 
 Added a pluck synth track: four polyphonic voices with an instant attack, a short decay and a fast-closing filter (`DBX-026`), its notes stored in each pattern and played by the chain (`DBX-027`), and a PLUCK view in the interface, the existing synth being renamed PAD, attested by the human (`DBX-028`). The sound of the drums, the bass and the pad is unchanged. Windows and Linux only. Full text: the git history of the brief (`git log --follow`).
+
+## Drum box, sound effects track — closed 2026-10-22
+
+Added an FX track of six synthesised sounds: siren, laser, riser, impact, whoosh and scratch (`DBX-030`), six FX step rows stored in each pattern and played by the chain (`DBX-031`), and an FX view in the interface, attested by the human (`DBX-032`). The sound of the other tracks is unchanged. Windows and Linux only. Limit: no demo FX hits in the starting song. Full text: the git history of the brief (`git log --follow`).
