@@ -1,0 +1,43 @@
+# Local configuration
+.env.local
+*.local
+
+# Dependencies and builds
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# Test and coverage results
+coverage/
+.coverage
+.coverage.*
+htmlcov/
+
+# System
+.DS_Store
+
+# >>> drwil — lines drwil needs; `drwil init` adds the missing ones to an existing .gitignore
+# Secrets: never versioned (SEC-007).
+.env
+# AI tool settings: team settings (permissions, hooks) stay versioned;
+# personal preferences do not.
+.claude/settings.local.json
+# Evidence of `drwil verify --evidence` (one per run, local); human attestations
+# (`drwil attest`) stay versioned: they are reviewed in PRs.
+.drwil/evidence/*
+!.drwil/evidence/attestations/
+# Runtime governance state (active activity and brief of this clone): local,
+# never versioned — resuming goes through the versioned brief (docs/ia-first.md).
+.drwil/state.json
+# Fingerprint of the last short reminder injected to the agent (`node .githooks/state.mjs reminder`):
+# local like the state, so it is only reinjected when it changed.
+.drwil/reminder.json
+# Identifiers already recalled to the agent in its session (.claude/hooks/id-glossary.mjs): local.
+.drwil/glossary.json
+# <<< drwil

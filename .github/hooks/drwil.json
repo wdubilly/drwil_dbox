@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "hooks": {
+    "sessionStart": [
+      {
+        "type": "command",
+        "command": "node .githooks/state.mjs copilot-start",
+        "cwd": ".",
+        "timeoutSec": 10
+      }
+    ],
+    "userPromptTransformed": [
+      {
+        "type": "command",
+        "command": "node .githooks/state.mjs copilot-message",
+        "cwd": ".",
+        "timeoutSec": 10
+      }
+    ]
+  }
+}

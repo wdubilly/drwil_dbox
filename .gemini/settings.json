@@ -1,0 +1,54 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "name": "drwil-state",
+            "type": "command",
+            "command": "node \"$GEMINI_PROJECT_DIR/.githooks/state.mjs\" gemini-start",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "BeforeAgent": [
+      {
+        "hooks": [
+          {
+            "name": "drwil-reminder",
+            "type": "command",
+            "command": "node \"$GEMINI_PROJECT_DIR/.githooks/state.mjs\" gemini-message",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "BeforeTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "drwil-scope",
+            "type": "command",
+            "command": "node \"$GEMINI_PROJECT_DIR/.claude/hooks/scope-reminder.mjs\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ],
+    "AfterTool": [
+      {
+        "matcher": "write_file|replace",
+        "hooks": [
+          {
+            "name": "drwil-scope-after",
+            "type": "command",
+            "command": "node \"$GEMINI_PROJECT_DIR/.claude/hooks/scope-reminder.mjs\"",
+            "timeout": 10000
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,8 @@
+#!/bin/sh
+# Enabled by `git config core.hooksPath .githooks`. Git for Windows also runs this script through its sh.
+if ! command -v node >/dev/null 2>&1; then
+  echo "[ia-first] node introuvable / not found : contrôles non exécutés, commit refusé / checks not run, commit refused." >&2
+  exit 1
+fi
+# DRWIL_HOOK: only the commit may defer a project check outside its `paths` (see run-checks.mjs).
+DRWIL_HOOK=pre-commit exec node "$(dirname "$0")/run-checks.mjs"
