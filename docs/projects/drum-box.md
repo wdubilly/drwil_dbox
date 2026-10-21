@@ -1,6 +1,6 @@
 # Project: Drum box, first slice (standalone, 8 synthesised tracks)
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: in progress on 2026-10-21 — increments 1 to 3 implemented, `DBX-001` to `DBX-005` checks pass locally; waiting for the human to attest `DBX-006`.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/drum-box.md`
@@ -61,6 +61,7 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): brief scoped, no code.
-- **Uncommitted work**: this brief, the intent and its index line.
-- **Next step**: [human] start with `/drwil-start`.
+- **Last state** (2026-10-21): all three increments implemented on branch `workstream/drum-box`. Engine (`drumbox/Source/`, no JUCE) with tests `DBX-001` to `DBX-004`; JUCE standalone UI compiled and linked on Linux (Release) and `DBX-005` passes (transport logic test plus app build). Contracts `DBX-001` to `DBX-006` in `docs/contracts.md`, checks declared in `.drwil/ia-first.json`.
+- **Not verified**: the window has never been opened (no display here), nor any sound played on a real audio device; the look is untested by eye. The app build needs the X11, ALSA and FreeType development packages (this workstation had none: they were unpacked locally under `drumbox/build/sysroot`, git-ignored, and reached through `CPATH`, `LIBRARY_PATH` and `PKG_CONFIG_PATH`). No layer AGENTS.md for `drumbox/` (outside the brief's scope).
+- **Uncommitted work**: none once committed.
+- **Next step**: [human] try the app (`cmake -S drumbox -B drumbox/build/app -G Ninja && cmake --build drumbox/build/app`, binary `drumbox/build/app/DrumBox_artefacts/Debug/Drum Box`) and attest `DBX-006` (`drwil attest`); then the agent closes the workstream.
