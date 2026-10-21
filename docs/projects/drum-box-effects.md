@@ -1,6 +1,6 @@
 # Project: Drum box, effects and sound presets
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: in progress on 2026-10-22 — increments 1 and 2 done (`DBX-014` to `DBX-016` tests pass), increment 3 built (Linux app builds, EFFECTS view, sends in TRACKS, preset selectors); `DBX-017` waits for the human attestation.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/sound-presets-effects.md`
@@ -63,6 +63,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. The mixer workstream is closed (see the journal).
+- **Last state** (2026-10-22): engine (five effects, master chain, send per track, factory and user presets) and interface (EFFECTS view, SEND slider on each track strip, preset selector and SAVE button under each track editor) are implemented on the workstream branch; `DBX-014` to `DBX-016` pass with `DBX-001` to `DBX-013` and `DBX-026` to `DBX-031` still green; the Linux app builds and starts. User presets go to the per-user application data folder, `DrumBox/presets/<kind>/<name>.preset`.
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [human] try the app (Linux build, or the `.exe` artifact of the CI run) and attest `DBX-017` (`drwil attest`, human gesture); then the agent closes the workstream.

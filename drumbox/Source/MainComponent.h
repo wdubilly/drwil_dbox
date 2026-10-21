@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DrumEngine.h"
+#include "Presets.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -95,6 +96,8 @@ public:
     std::function<void()> onAudibilityChange;
 
     void setCurrentPosition (int position);
+    // Shows again the mixer values of the track, after a preset changed them.
+    void refreshFromMixer();
     void paint (juce::Graphics&) override;
     void resized() override;
     void mouseUp (const juce::MouseEvent&) override;
@@ -109,7 +112,7 @@ private:
     std::function<void (int)> open;
     int currentPosition = -1;
     juce::TextButton nameButton, muteButton { "M" }, soloButton { "S" };
-    juce::Slider volume, tune, detune;
+    juce::Slider volume, tune, detune, send;
 };
 
 class MainComponent : public juce::Component,
@@ -124,7 +127,7 @@ public:
     void resized() override;
 
 private:
-    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, Tracks, numViews };
+    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, Tracks, Effects, numViews };
 
     struct Knob
     {
@@ -147,6 +150,13 @@ private:
                   const juce::String& suffix, double skewMidPoint = 0.0);
     void layoutKnobs (juce::Rectangle<int> area, const std::vector<Knob*>& knobs);
     void loadStarterSong();
+    void syncControlsFromEngine();
+    void fillPresetList();
+    void applySelectedPreset();
+    void askPresetName();
+    void saveUserPreset (const juce::String& name);
+    bool hasPresets() const { return view <= Fx; }
+    drumbox::PresetKind presetKind() const { return (drumbox::PresetKind) (int) view; }
 
     drumbox::DrumEngine engine;
     juce::AudioDeviceManager deviceManager;
@@ -177,7 +187,20 @@ private:
          synthRelease, lfoRate, lfoDepth;
     Knob pluckCutoff, pluckDecay, pluckResonance, pluckMix;
 
+    // EFFECTS view: per effect an on button and three knobs
+    std::array<juce::TextButton, drumbox::numEffects> effectButtons;
+    std::array<std::array<Knob, 3>, drumbox::numEffects> effectKnobs;
+    std::array<std::array<float, 3>, drumbox::numEffects> effectScale;
+
+    // preset bar under the editors of the tracks
+    juce::Label presetLabel;
+    juce::ComboBox presetBox;
+    juce::TextButton presetSave { "SAVE" };
+    drumbox::FolderPresetStore presetStore;
+    int userPresetFirstId = 1000;
+
     juce::Rectangle<int> panel;
+    juce::Rectangle<int> presetBar;
     int shownStep = -1;
     int shownChainPosition = -1;
 };
