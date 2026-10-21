@@ -149,7 +149,7 @@ float BassVoice::next (const BassParams& params) noexcept
     const float decay = params.decay.load (std::memory_order_relaxed);
     const float level = envelope.next ({ 0.003f, decay, 0.55f, 0.06f }, sampleRate);
 
-    const double dt = frequency / sampleRate;
+    const double dt = frequency * pitch / sampleRate;
     phase = advance (phase, dt);
     const float raw = 0.6f * saw (phase, dt) + 0.4f * square (phase, dt);
 
@@ -225,7 +225,7 @@ float PolySynth::next (const SynthParams& params) noexcept
             continue;
         const float level = v.envelope.next (settings, sampleRate);
 
-        const double f1 = noteToFrequency (v.note) * bend;
+        const double f1 = noteToFrequency (v.note) * bend * pitch;
         const double f2 = f1 * std::pow (2.0, semitones2 / 12.0 + detune / 1200.0);
         v.phase1 = advance (v.phase1, f1 / sampleRate);
         v.phase2 = advance (v.phase2, f2 / sampleRate);
@@ -288,7 +288,7 @@ float PluckSynth::next (const PluckParams& params) noexcept
         if (! v.envelope.isActive())
             continue;
         const float level = v.envelope.next (settings, sampleRate);
-        const double dt = noteToFrequency (v.note) / sampleRate;
+        const double dt = noteToFrequency (v.note) * pitch / sampleRate;
         v.phase = advance (v.phase, dt);
         const float raw = (1.0f - mix) * saw (v.phase, dt) + mix * square (v.phase, dt);
         // the filter follows the level, so it closes fast along with the decay

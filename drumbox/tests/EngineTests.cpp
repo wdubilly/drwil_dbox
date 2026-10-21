@@ -1204,6 +1204,209 @@ TEST ("DBX-031 the engine plays the FX of the chain's second pattern", {
     CHECK (peak (second, 0, 3000) > 0.05f);
 })
 
+namespace
+{
+using MixerSetup = std::function<void (Pattern&, Mixer&)>;
+
+// One step of the first pattern through the whole engine, after the mixer gains have settled
+std::vector<float> renderMix (const MixerSetup& setup, int samples = stepSamples120)
+{
+    DrumEngine e;
+    e.prepare (sampleRate);
+    setup (e.getPattern(), e.getMixer());
+    renderEngine (e, 512); // stopped: lets the gains glide to their targets
+    e.setPlaying (true);
+    return renderEngine (e, samples);
+}
+
+// A hit on the kick, the bass, the pad, the pluck and the FX at once; `only` keeps one or several tracks
+void playTracks (Pattern& p, const std::vector<int>& tracks)
+{
+    for (int t : tracks)
+    {
+        if (t < mixerDrums)
+            p.set (t, 0, StepState::Normal);
+        else if (t == mixerBass)
+            p.setBass (0, 45);
+        else if (t == mixerPad)
+            p.setSynthNote (0, 0, 57);
+        else if (t == mixerPluck)
+            p.setPluckNote (0, 0, 60);
+        else
+            p.setFx (Impact, 0, StepState::Normal);
+    }
+}
+
+std::vector<int> allTracks()
+{
+    std::vector<int> all;
+    for (int t = 0; t < numMixerTracks; ++t)
+        all.push_back (t);
+    return all;
+}
+
+bool sameWave (const std::vector<float>& a, const std::vector<float>& b)
+{
+    if (a.size() != b.size())
+        return false;
+    for (size_t i = 0; i < a.size(); ++i)
+        if (std::fabs (a[i] - b[i]) > 1.0e-6f)
+            return false;
+    return true;
+}
+} // namespace
+
+TEST ("DBX-011 a muted track is silent and the others are unchanged", {
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        const auto alone = renderMix ([t] (Pattern& p, Mixer&) { playTracks (p, { t }); });
+        CHECK (peak (alone) > 0.02f);
+        const auto muted = renderMix ([t] (Pattern& p, Mixer& m) { playTracks (p, { t }); m.setMute (t, true); });
+        CHECK (peak (muted) == 0.0f);
+    }
+    // the kick is muted: what remains is the bass and the pluck alone
+    const auto rest = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { mixerBass, mixerPluck }); });
+    const auto mixed = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Kick, mixerBass, mixerPluck }); m.setMute (Kick, true); });
+    CHECK (sameWave (rest, mixed));
+})
+
+TEST ("DBX-011 with solo only the soloed tracks are heard, with none every unmuted track is", {
+    const auto everything = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, allTracks()); });
+    const auto noSolo = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, allTracks()); m.setSolo (Tom, true); m.setSolo (Tom, false); });
+    CHECK (sameWave (everything, noSolo));
+
+    const auto kickOnly = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Kick }); });
+    const auto kickSolo = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, allTracks()); m.setSolo (Kick, true); });
+    CHECK (peak (kickOnly) > 0.02f);
+    CHECK (sameWave (kickOnly, kickSolo));
+
+    const auto pair = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Kick, mixerPad }); });
+    const auto pairSolo = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, allTracks()); m.setSolo (Kick, true); m.setSolo (mixerPad, true); });
+    CHECK (sameWave (pair, pairSolo));
+
+    // a track that is both muted and soloed stays silent
+    const auto both = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Kick }); m.setSolo (Kick, true); m.setMute (Kick, true); });
+    CHECK (peak (both) == 0.0f);
+})
+
+TEST ("DBX-011 muting while playing glides instead of cutting", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    playTracks (e.getPattern(), { mixerBass });
+    e.getPattern().setBass (1, 45);
+    e.setPlaying (true);
+    renderEngine (e, 3000);
+    e.getMixer().setMute (mixerBass, true);
+    const auto wave = renderEngine (e, 2000);
+    CHECK (peak (wave, 0, 32) > 0.0f);
+    CHECK (peak (wave, 400, wave.size()) == 0.0f);
+})
+
+TEST ("DBX-012 a lower volume makes that track quieter and leaves the others unchanged", {
+    const auto full = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Kick }); });
+    const auto half = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Kick }); m.setVolume (Kick, 0.5f); });
+    CHECK (peak (full) > 0.02f);
+    CHECK (std::fabs (peak (half) / peak (full) - 0.5f) < 0.01f);
+
+    const auto bassOnly = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { mixerBass }); });
+    const auto quietKick = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Kick, mixerBass }); m.setVolume (Kick, 0.0f); });
+    CHECK (sameWave (bassOnly, quietKick));
+
+    const auto before = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Snare, mixerPluck }); });
+    const auto after = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Snare, mixerPluck }); m.setVolume (Kick, 0.2f); m.setVolume (mixerBass, 0.9f); });
+    CHECK (sameWave (before, after));
+})
+
+TEST ("DBX-012 the volume has a default of one and stays within its range", {
+    Mixer m;
+    for (int t = 0; t < numMixerTracks; ++t)
+        CHECK (m.getVolume (t) == 1.0f);
+    m.setVolume (3, -1.0f);
+    CHECK (m.getVolume (3) == 0.0f);
+    m.setVolume (3, 9.0f);
+    CHECK (m.getVolume (3) == maxVolume);
+    m.setVolume (99, 0.2f); // unknown tracks are ignored
+    CHECK (m.getVolume (3) == maxVolume);
+})
+
+namespace
+{
+int crossingsIn (const std::vector<float>& wave, size_t count)
+{
+    int crossings = 0;
+    for (size_t i = 1; i < std::min (count, wave.size()); ++i)
+        if ((wave[i - 1] < 0) != (wave[i] < 0))
+            ++crossings;
+    return crossings;
+}
+} // namespace
+
+TEST ("DBX-029 the tune and the detune move the pitch of a drum voice and no other track", {
+    for (int t : { static_cast<int> (Kick), static_cast<int> (Tom), static_cast<int> (Cowbell) })
+    {
+        const auto plain = renderMix ([t] (Pattern& p, Mixer&) { playTracks (p, { t }); }, 4000);
+        const auto up = renderMix ([t] (Pattern& p, Mixer& m) { playTracks (p, { t }); m.setTune (t, 12.0f); }, 4000);
+        const auto down = renderMix ([t] (Pattern& p, Mixer& m) { playTracks (p, { t }); m.setTune (t, -12.0f); }, 4000);
+        const double ratioUp = static_cast<double> (crossingsIn (up, 4000)) / crossingsIn (plain, 4000);
+        const double ratioDown = static_cast<double> (crossingsIn (down, 4000)) / crossingsIn (plain, 4000);
+        CHECK (ratioUp > 1.8 && ratioUp < 2.2);
+        CHECK (ratioDown > 0.45 && ratioDown < 0.55);
+    }
+    const auto plain = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Tom }); }, 4000);
+    const auto cents = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Tom }); m.setDetune (Tom, 100.0f); }, 4000);
+    const auto semitone = renderMix ([] (Pattern& p, Mixer& m) { playTracks (p, { Tom }); m.setTune (Tom, 1.0f); }, 4000);
+    CHECK (sameWave (cents, semitone));
+    CHECK (crossingsIn (cents, 4000) > crossingsIn (plain, 4000));
+
+    const auto others = renderMix ([] (Pattern& p, Mixer&) { playTracks (p, { Snare, mixerBass, mixerPad, mixerPluck, mixerFx }); });
+    const auto tuned = renderMix ([] (Pattern& p, Mixer& m)
+    {
+        playTracks (p, { Snare, mixerBass, mixerPad, mixerPluck, mixerFx });
+        m.setTune (Kick, 7.0f);
+        m.setDetune (Tom, -40.0f);
+    });
+    CHECK (sameWave (others, tuned));
+})
+
+TEST ("DBX-029 the tune and the detune move every note of the bass, the pad and the pluck", {
+    struct Case { int track; std::function<void (Pattern&)> play; int note; };
+    const Case cases[] = {
+        { mixerBass, [] (Pattern& p) { p.setBass (0, 45); }, 45 },
+        { mixerPad, [] (Pattern& p) { p.setSynthNote (0, 0, 57); }, 57 },
+        { mixerPluck, [] (Pattern& p) { p.setPluckNote (0, 0, 52); }, 52 },
+    };
+    for (const auto& c : cases)
+    {
+        const auto freq = [&c] (float tune, float detune)
+        {
+            const auto wave = renderMix ([&c, tune, detune] (Pattern& p, Mixer& m)
+            {
+                c.play (p);
+                m.setTune (c.track, tune);
+                m.setDetune (c.track, detune);
+            });
+            return estimateFrequency (wave, 100, 3400);
+        };
+        const double base = noteToFrequency (c.note);
+        CHECK (isNear (freq (0.0f, 0.0f), base, 0.03));
+        CHECK (isNear (freq (7.0f, 0.0f), base * std::pow (2.0, 7.0 / 12.0), 0.03));
+        CHECK (isNear (freq (-12.0f, 0.0f), base * 0.5, 0.03));
+        CHECK (isNear (freq (0.0f, 100.0f), base * std::pow (2.0, 1.0 / 12.0), 0.03));
+    }
+})
+
+TEST ("DBX-029 the tune is limited to 24 semitones and the detune to 100 cents", {
+    Mixer m;
+    CHECK (m.getTune (0) == 0.0f && m.getDetune (0) == 0.0f && m.pitchRatio (0) == 1.0);
+    m.setTune (0, 40.0f);
+    m.setDetune (0, -300.0f);
+    CHECK (m.getTune (0) == 24.0f);
+    CHECK (m.getDetune (0) == -100.0f);
+    CHECK (std::fabs (m.pitchRatio (0) - std::pow (2.0, 23.0 / 12.0)) < 1.0e-9);
+    m.setTune (0, -40.0f);
+    CHECK (m.getTune (0) == -24.0f);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";

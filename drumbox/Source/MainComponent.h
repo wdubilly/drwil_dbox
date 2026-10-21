@@ -6,6 +6,7 @@
 #include <juce_gui_basics/juce_gui_basics.h>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -83,6 +84,34 @@ private:
     bool current = false;
 };
 
+// One line of the TRACKS view: the track's name (click to open its editor), the patterns of the
+// chain where it plays, mute, solo, volume, tune and detune.
+class TrackStrip : public juce::Component
+{
+public:
+    TrackStrip (drumbox::Song& songToShow, drumbox::Mixer& mixerToEdit, int trackIndex, std::function<void (int)> onOpen);
+
+    // Called after a mute or a solo changes, so the other strips can show what is heard.
+    std::function<void()> onAudibilityChange;
+
+    void setCurrentPosition (int position);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseUp (const juce::MouseEvent&) override;
+
+private:
+    bool playsIn (const drumbox::Pattern&) const;
+    juce::Rectangle<int> mapArea() const;
+
+    drumbox::Song& song;
+    drumbox::Mixer& mixer;
+    int track;
+    std::function<void (int)> open;
+    int currentPosition = -1;
+    juce::TextButton nameButton, muteButton { "M" }, soloButton { "S" };
+    juce::Slider volume, tune, detune;
+};
+
 class MainComponent : public juce::Component,
                       private juce::AudioIODeviceCallback,
                       private juce::Timer
@@ -95,7 +124,7 @@ public:
     void resized() override;
 
 private:
-    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, numViews };
+    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, Tracks, numViews };
 
     struct Knob
     {
@@ -113,6 +142,7 @@ private:
     void updateTransportButton();
     void showView (View view);
     void selectPattern (int index);
+    void openTrackEditor (int mixerTrack);
     void addKnob (Knob& knob, const juce::String& text, double min, double max, double step, double initial,
                   const juce::String& suffix, double skewMidPoint = 0.0);
     void layoutKnobs (juce::Rectangle<int> area, const std::vector<Knob*>& knobs);
@@ -140,6 +170,7 @@ private:
     std::array<std::unique_ptr<NoteButton>, drumbox::pluckVoices * drumbox::numSteps> pluckSteps;
     std::array<juce::Label, drumbox::pluckVoices> pluckSlotLabels;
     std::array<std::unique_ptr<ChainCell>, drumbox::maxChainLength> chainCells;
+    std::array<std::unique_ptr<TrackStrip>, drumbox::numMixerTracks> trackStrips;
     juce::Label bassLabel;
     Knob bassCutoff, bassDecay;
     Knob osc2Semitones, osc2Detune, osc2Mix, synthCutoff, synthResonance, synthAttack, synthDecay, synthSustain,

@@ -28,3 +28,7 @@ Added a pluck synth track: four polyphonic voices with an instant attack, a shor
 ## Drum box, sound effects track — closed 2026-10-22
 
 Added an FX track of six synthesised sounds: siren, laser, riser, impact, whoosh and scratch (`DBX-030`), six FX step rows stored in each pattern and played by the chain (`DBX-031`), and an FX view in the interface, attested by the human (`DBX-032`). The sound of the other tracks is unchanged. Windows and Linux only. Limit: no demo FX hits in the starting song. Full text: the git history of the brief (`git log --follow`).
+
+## Drum box, track view, mute, solo, volume and tuning — closed 2026-10-22
+
+Added a song-wide mixer over the 12 tracks: mute and solo, with mute taking priority (`DBX-011`), volume from 0 to 150 % (`DBX-012`), tune of ±24 semitones and detune of ±100 cents (`DBX-029`), and a TRACKS view stacking every track with its chain map, attested by the human (`DBX-013`). Gains glide over about 3 ms to avoid clicks. Windows and Linux only. Limits: the rim noise component does not follow the tune; mute and solo are not yet applied to the WAV export (next brief). Full text: the git history of the brief (`git log --follow`).

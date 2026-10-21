@@ -292,6 +292,45 @@ contracts » section).
 **Manual** : the human tries the app and attests that the FX view is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-fx — « The interface offers an FX view with the six step rows, and stays easy to use with the 70's funk feel »
 
+## DBX-011 — A muted track is silent, and with solo only the soloed tracks are heard
+**Rule** : Each of the twelve tracks (the eight drums, the bass, the pad, the pluck and the FX) can be muted and soloed, song-wide and outside any pattern; a muted track is silent (even when also in solo), with one or several tracks in solo only those tracks are heard, with none in solo every unmuted track is heard; the other tracks are unchanged. With no mute and no solo the sound is as before.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Mixer.h`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-011` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : mixing what you hear is the first use of a track list; a mute must never colour the other tracks
+**Check** : `dbx-011`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-mixer — « Each of the twelve tracks can be muted or soloed, several tracks can be in solo together »
+
+## DBX-012 — Each track has its own volume
+**Rule** : Each of the twelve tracks has a volume (0 to 150 %, 100 % by default, song-wide and outside any pattern): a lower volume makes that track quieter in proportion and leaves the other tracks unchanged; at 100 % the sound is as before.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Mixer.h`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-012` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : balancing the tracks against each other is what a mixer is for
+**Check** : `dbx-012`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-mixer — « Each track has its own volume »
+
+## DBX-029 — Each track has a tune (±24 semitones) and a detune (±100 cents)
+**Rule** : Each of the twelve tracks has a tune (−24 to +24 semitones) and a detune (−100 to +100 cents), song-wide and outside any pattern: the pitch of a drum voice or of an FX voice, or of every note of the bass, the pad and the pluck, moves by that amount, and the other tracks are unchanged; at 0 the sound is as before. A noise-only drum (the rim click's noise) keeps its colour.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Mixer.h`, `drumbox/Source/Voices.cpp`, `drumbox/Source/Instruments.cpp`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-029` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a drum kit or a line is tuned to the song without editing its notes
+**Check** : `dbx-029`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-mixer — « Every track gets a tune (±24 semitones) and a detune (±100 cents) »
+
+## DBX-013 — The TRACKS view stacks the twelve tracks and is easy to use with the 70's funk feel
+**Rule** : The standalone window offers a TRACKS view that stacks the eight drums, the bass, the pad, the pluck and the FX one above the other, each with the patterns of the chain where it plays, mute, solo, volume, tune and detune, and where clicking a track opens its editor, while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the track view is the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the TRACKS view shows the twelve tracks stacked with mute, solo, volume, tune and detune, that clicking a track opens its editor, and that it is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-mixer — « A TRACKS view stacks the twelve tracks one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |
