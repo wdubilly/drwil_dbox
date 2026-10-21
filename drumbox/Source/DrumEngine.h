@@ -14,6 +14,7 @@ constexpr float normalGain = 0.6f;
 constexpr float accentGain = 1.0f;
 constexpr float bassLevel = 0.5f;
 constexpr float synthLevel = 0.5f;
+constexpr float pluckLevel = 0.5f;
 
 // Everything the audio callback needs, with no dependency on JUCE or on a device.
 // Setters may be called from the UI thread; render() runs on the audio thread.
@@ -30,6 +31,7 @@ public:
 
     BassParams& getBassParams() noexcept { return bassParams; }
     SynthParams& getSynthParams() noexcept { return synthParams; }
+    PluckParams& getPluckParams() noexcept { return pluckParams; }
 
     void setTempo (double bpm) noexcept { tempoRequest.store (bpm); }
     void setSwing (double percent) noexcept { swingRequest.store (percent); }
@@ -50,8 +52,10 @@ private:
     VoiceBank voices;
     BassVoice bass;
     PolySynth synth;
+    PluckSynth pluck;
     BassParams bassParams;
     SynthParams synthParams;
+    PluckParams pluckParams;
     std::vector<Trigger> triggers;
     std::vector<NoteEvent> notes;
     std::atomic<double> tempoRequest { 120.0 };

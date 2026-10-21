@@ -234,6 +234,35 @@ contracts » section).
 **Manual** : the human tries the app and attests that the bass, synth, pattern bank and chain editors are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-song — « The interface lets the user edit the bass and the synth, build the chain, and stays easy to use with the 70's funk feel »
 
+## DBX-026 — The pluck is a four-voice synth whose notes start at once and decay quickly
+**Rule** : Each step of a pattern can carry up to four pluck notes (and an accent flag) that play together; the pluck has four voices (a fifth note takes over the oldest), each with an instant attack, a short decay that ends the note even while the key is held, and a low-pass filter that closes quickly along with the decay; each note plays at the pitch set on its step (within 3%), an empty step is silent, an accent is at least 1.3 times the peak of a normal step, and the sound is finite, bounded and ends. The sound of the drums, the bass and the synth is unchanged by the pluck.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Instruments.cpp`, `drumbox/Source/Pattern.h`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-026` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : plucked chords and stabs are a different voice from the pad: they must hit at once and fade fast, without disturbing the other tracks
+**Check** : `dbx-026`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-pluck — « The pluck is a four-voice polyphonic synth whose notes start at once, decay quickly and close the filter quickly, and it plays the notes set on its steps »
+
+## DBX-027 — Each pattern holds pluck notes and the chain plays them in time
+**Rule** : Each of the 16 patterns holds its own pluck notes (pitch 24–96, MIDI numbering, up to four per step, plus an accent flag) next to its drums, bass and synth; the sequencer plays them with the pattern chain, one after the other in time (within one sample, independent of the audio block size) and then loops, as it does for the other tracks.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Pattern.h`, `drumbox/Source/Sequencer.cpp`, `drumbox/Source/DrumEngine.cpp`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-027` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a song needs the pluck line to change from pattern to pattern, in time with the rest
+**Check** : `dbx-027`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-pluck — « Each pattern holds the pluck notes next to the drums, the bass and the pad, and the pattern chain plays them in time »
+
+## DBX-028 — The PAD and PLUCK views are easy to use and keep the 70's funk feel
+**Rule** : The standalone window shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes step by step (note on/off, pitch by drag or wheel, accent) and its sound knobs, while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
+**Reason** : the editors are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that the PAD view and the PLUCK view are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-pluck — « The interface shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes and sound, and stays easy to use with the 70's funk feel »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

@@ -1,6 +1,6 @@
 # Project: Drum box, pluck synth track
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: started on 2026-10-21 — increments 1 and 2 done (pluck voice, pattern data and chain; `DBX-026`, `DBX-027` pass); increment 3 (interface) next.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: none (requested in conversation, framed directly)
@@ -61,6 +61,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. First of the queue: pluck, FX, then mixer, effects, songs, editing.
-- **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Last state** (2026-10-21): increments 1 and 2 committed together (the pluck voice needs the pattern data to be tested through the engine): `PluckSynth` in `Instruments.*`, pluck notes in `Pattern.h`, `Instrument::Pluck` in the sequencer, `DrumEngine::getPluckParams()`; `DBX-026` and `DBX-027` pass, `DBX-001` to `DBX-009` unchanged.
+- **Uncommitted work**: none.
+- **Next step**: [AI] increment 3 — SYNTH renamed PAD, PLUCK view in `MainComponent.*`; then [human] try the app and attest `DBX-028`.

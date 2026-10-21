@@ -801,6 +801,217 @@ TEST ("DBX-009 the synth is silent without notes, accented louder, bounded and e
     CHECK (peak (normal, 40000, normal.size()) == 0.0f);
 })
 
+namespace
+{
+std::vector<float> renderPluck (PluckSynth& synth, const PluckParams& params, int samples)
+{
+    std::vector<float> out (static_cast<size_t> (samples));
+    for (auto& v : out)
+        v = synth.next (params);
+    return out;
+}
+} // namespace
+
+TEST ("DBX-026 the pluck plays the pitch set on the step, up to four notes at once", {
+    for (int note : { 45, 52, 60, 69 })
+    {
+        const auto wave = renderBass ([note] (Pattern& p) { p.setPluckNote (0, 0, note); }, stepSamples120);
+        CHECK (peak (wave) > 0.05f);
+        const double f = estimateFrequency (wave, 100, 3400);
+        if (! isNear (f, noteToFrequency (note), 0.03))
+            std::cerr << "  note " << note << " measured " << f << " Hz\n";
+        CHECK (isNear (f, noteToFrequency (note), 0.03));
+    }
+
+    const int chord[] = { 57, 61, 64, 68 };
+    const auto wave = renderBass ([&chord] (Pattern& p)
+    {
+        for (int v = 0; v < pluckVoices; ++v)
+            p.setPluckNote (0, v, chord[v]);
+    }, stepSamples120);
+    CHECK (peak (wave) <= 1.0f);
+    const double reference = powerAt (wave, 200, 1500, 370.0);
+    for (int note : chord)
+        CHECK (powerAt (wave, 200, 1500, noteToFrequency (note)) > 4.0 * reference);
+
+    auto seq = makeSequencer (120.0, 0.0);
+    Pattern pattern;
+    pattern.setPluckNote (2, 0, 60);
+    pattern.setPluckNote (2, 3, 67);
+    std::vector<Trigger> triggers;
+    std::vector<NoteEvent> events;
+    seq.process (pattern, stepSamples120 * 4, triggers, events);
+    CHECK (events.size() == 2);
+    for (auto& ev : events)
+        CHECK (ev.instrument == Instrument::Pluck);
+})
+
+TEST ("DBX-026 the pluck has four voices and steals the oldest for a fifth note", {
+    PluckSynth synth;
+    synth.prepare (sampleRate);
+    const PluckParams params;
+    for (int i = 0; i < 4; ++i)
+    {
+        synth.noteOn (50 + i * 3, 0.6f, 20000);
+        CHECK (synth.activeVoices() == i + 1);
+    }
+    synth.noteOn (80, 0.6f, 20000);
+    CHECK (synth.activeVoices() == 4);
+
+    const auto wave = renderPluck (synth, params, 6000);
+    CHECK (powerAt (wave, 300, 4000, noteToFrequency (50)) < 0.25 * powerAt (wave, 300, 4000, noteToFrequency (80)));
+})
+
+TEST ("DBX-026 the pluck starts at once, decays quickly and closes its filter quickly", {
+    PluckSynth synth;
+    synth.prepare (sampleRate);
+    const PluckParams params;
+    synth.noteOn (45, 0.6f, 60000);
+    const auto wave = renderPluck (synth, params, 30000);
+    const float top = peak (wave);
+    CHECK (top > 0.05f);
+    CHECK (peak (wave, 0, 150) > 0.5f * top); // full level within about 3 ms
+    CHECK (peak (wave, 15000, wave.size()) == 0.0f); // gone after a third of a second, though the key is held
+    CHECK (highFrequencyShare (wave, 0, 1500) > 2.0 * highFrequencyShare (wave, 3500, 5000));
+
+    // the existing synth, by contrast, rises slowly and lasts
+    SynthParams padParams;
+    PolySynth pad;
+    pad.prepare (sampleRate);
+    pad.noteOn (45, 0.6f, 60000);
+    const auto padWave = renderPoly (pad, padParams, 30000);
+    CHECK (peak (padWave, 0, 150) < 0.2f * peak (padWave));
+    CHECK (peak (padWave, 15000, padWave.size()) > 0.0f);
+})
+
+TEST ("DBX-026 the pluck is silent without notes, accented louder, bounded and ends", {
+    CHECK (peak (renderBass ([] (Pattern&) {}, stepSamples120 * 4)) == 0.0f);
+
+    auto chord = [] (bool accent)
+    {
+        return renderBass ([accent] (Pattern& p)
+        {
+            for (int v = 0; v < pluckVoices; ++v)
+                p.setPluckNote (0, v, 48 + v * 4);
+            p.setPluckAccent (0, accent);
+        }, stepSamples120 * 8);
+    };
+    const auto normal = chord (false);
+    const auto accent = chord (true);
+    CHECK (peak (accent) > peak (normal) * 1.3f);
+    CHECK (peak (accent) <= 1.0f);
+    for (float v : accent)
+        CHECK (std::isfinite (v));
+    CHECK (peak (normal, 40000, normal.size()) == 0.0f);
+})
+
+TEST ("DBX-026 the existing synth, the bass and the drums sound as before", {
+    // the pluck adds nothing to a pattern that does not use it
+    const auto wave = renderBass ([] (Pattern& p)
+    {
+        p.set (Kick, 0, StepState::Normal);
+        p.setBass (0, 40);
+        p.setSynthNote (0, 0, 57);
+    }, stepSamples120 * 2);
+    DrumEngine e;
+    e.prepare (sampleRate);
+    e.getPattern().set (Kick, 0, StepState::Normal);
+    e.getPattern().setBass (0, 40);
+    e.getPattern().setSynthNote (0, 0, 57);
+    e.getPluckParams().cutoff = 9000.0f;
+    e.setPlaying (true);
+    const auto other = renderEngine (e, stepSamples120 * 2);
+    CHECK (wave == other);
+})
+
+TEST ("DBX-026 the pluck knobs change the sound", {
+    auto play = [] (const std::function<void (PluckParams&)>& setup, int samples)
+    {
+        PluckParams params;
+        setup (params);
+        PluckSynth synth;
+        synth.prepare (sampleRate);
+        synth.noteOn (57, 0.6f, 20000);
+        return renderPluck (synth, params, samples);
+    };
+    const auto dark = play ([] (PluckParams& p) { p.cutoff = 300.0f; }, 6000);
+    const auto bright = play ([] (PluckParams& p) { p.cutoff = 6000.0f; }, 6000);
+    CHECK (highFrequencyShare (dark, 200, 3000) < 0.5 * highFrequencyShare (bright, 200, 3000));
+
+    const auto shortDecay = play ([] (PluckParams& p) { p.decay = 0.05f; }, 12000);
+    const auto longDecay = play ([] (PluckParams& p) { p.decay = 0.4f; }, 12000);
+    CHECK (peak (longDecay, 6000, 12000) > 4.0f * peak (shortDecay, 6000, 12000) + 0.01f);
+})
+
+TEST ("DBX-027 each pattern holds its own pluck notes and clears them", {
+    Song song;
+    song.pattern (6).setPluckNote (5, 2, 62);
+    song.pattern (6).setPluckAccent (5, true);
+    song.pattern (6).setBass (2, 40);
+    CHECK (song.pattern (6).getPluckNote (5, 2) == 62);
+    CHECK (song.pattern (6).getPluckAccent (5));
+    CHECK (song.pattern (6).getBassNote (2) == 40);
+    CHECK (song.pattern (6).getSynthNote (5, 2) == noNote);
+    CHECK (song.pattern (7).getPluckNote (5, 2) == noNote);
+    CHECK (! song.pattern (7).getPluckAccent (5));
+    song.pattern (6).setPluckNote (5, 0, 200);
+    CHECK (song.pattern (6).getPluckNote (5, 0) == highestNote);
+    song.pattern (6).clear();
+    CHECK (song.pattern (6).getPluckNote (5, 2) == noNote);
+    CHECK (! song.pattern (6).getPluckAccent (5));
+})
+
+TEST ("DBX-027 the chain plays the pluck notes of each pattern in time", {
+    auto seq = makeSequencer (120.0, 0.0);
+    Song song;
+    song.pattern (0).setPluckNote (0, 0, 50);
+    song.pattern (3).setPluckNote (4, 0, 62);
+    song.setChainLength (2);
+    song.setChainEntry (0, 0);
+    song.setChainEntry (1, 3);
+
+    std::vector<std::pair<long long, int>> plucks;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    long long done = 0;
+    const long long total = 5512LL * 16 * 3 + 100;
+    while (done < total)
+    {
+        const int n = 477;
+        out.clear();
+        notes.clear();
+        seq.process (song, n, out, notes);
+        for (auto& ev : notes)
+            if (ev.instrument == Instrument::Pluck)
+                plucks.push_back ({ done + ev.sampleOffset, ev.note });
+        done += n;
+    }
+    // steps last 5512.5 samples at 120 bpm: pattern 0 at step 0, pattern 3 at step 16 + 4, then the loop
+    const double step = 5512.5;
+    const long long expected[] = { 0, std::llround (20 * step), std::llround (32 * step) };
+    const int pitches[] = { 50, 62, 50 };
+    CHECK (plucks.size() == 3);
+    for (size_t i = 0; i < std::min<size_t> (plucks.size(), 3); ++i)
+        CHECK (std::llabs (plucks[i].first - expected[i]) <= 1 && plucks[i].second == pitches[i]);
+})
+
+TEST ("DBX-027 the engine plays the pluck of the chain's second pattern", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    auto& song = e.getSong();
+    song.pattern (2).setPluckNote (0, 0, 57);
+    song.setChainLength (2);
+    song.setChainEntry (0, 1); // empty pattern: silence
+    song.setChainEntry (1, 2);
+    e.setTempo (240.0);
+    e.setPlaying (true);
+    const int stepSamples = static_cast<int> (sampleRate * 60.0 / 240.0 / 4.0);
+    const auto first = renderEngine (e, stepSamples * 16);
+    CHECK (peak (first) == 0.0f);
+    const auto second = renderEngine (e, stepSamples * 16);
+    CHECK (peak (second, 0, 3000) > 0.05f);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";
