@@ -1,0 +1,105 @@
+{
+  "projectName": "drwil_dbox",
+  "projectShort": "drwil_dbox",
+  "lang": "en",
+  "layers": [],
+  "contractPrefixes": [
+    "SEC",
+    "QUA"
+  ],
+  "tools": [
+    "claude",
+    "codex",
+    "cursor",
+    "gemini",
+    "copilot"
+  ],
+  "ci": "github",
+  "dirs": {
+    "projects": "docs/projects",
+    "intentions": "docs/intentions",
+    "recipes": "docs/recipes",
+    "contracts": "docs/contracts.md",
+    "index": "docs/projects/pending.md"
+  },
+  "stack": [],
+  "checks": [
+    {
+      "id": "drumbox-lint",
+      "name": "drumbox engine builds with warnings as errors",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-001",
+      "name": "DBX-001 sequencer timing and tempo",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-001$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-002",
+      "name": "DBX-002 swing",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-002$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-003",
+      "name": "DBX-003 step states and accent",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-003$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-004",
+      "name": "DBX-004 eight synthesised voices",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-004$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-005",
+      "name": "DBX-005 standalone app builds, transport tests pass",
+      "run": "cmake -S drumbox -B drumbox/build/app -G Ninja -DCMAKE_BUILD_TYPE=Release && cmake --build drumbox/build/app --target DrumBox drumbox_tests && ctest --test-dir drumbox/build/app -R \"^DBX-005$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    }
+  ],
+  "scopeReminder": "blocking",
+  "transitions": "human",
+  "scopeGate": "warning",
+  "newRequirements": "blocking",
+  "layerPrefixes": [
+    "app",
+    "tests",
+    "src",
+    "scripts"
+  ],
+  "codePrefixes": [
+    "scripts",
+    ".githooks",
+    "e2e"
+  ],
+  "extraCodeFiles": [],
+  "extraCodeGlobs": [
+    "docker-compose*.yml"
+  ],
+  "ciFiles": [
+    ".github/workflows/ia-first.yml"
+  ],
+  "mode": "full"
+}

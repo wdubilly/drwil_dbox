@@ -1,0 +1,11 @@
+# Extends gitleaks' default rules. Needed because the kit manifest
+# (.drwil/installed-files.json) holds sha256 fingerprints: their hexadecimal
+# form is mistaken by the generic-api-key rule for a secret key, while they are
+# only content fingerprints, not secrets.
+[extend]
+useDefault = true
+
+[allowlist]
+paths = [
+  '''(^|/)\.drwil/installed-files\.json$''',
+]

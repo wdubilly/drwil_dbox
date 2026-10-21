@@ -1,0 +1,62 @@
+name: ia-first
+on: [push, pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+      # Without gitleaks the secrets check is "not run", which fails run-checks in CI (QUA-013).
+      # Pinned version, archive checked against its published sum; installed where the engine looks (~/.local/bin).
+      - name: Install gitleaks 8.21.2
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.21.2/gitleaks_8.21.2_linux_x64.tar.gz
+          echo "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba  gitleaks.tar.gz" | sha256sum -c -
+          mkdir -p ~/.local/bin && tar -xzf gitleaks.tar.gz -C ~/.local/bin gitleaks && rm gitleaks.tar.gz
+          ~/.local/bin/gitleaks version
+      - name: Install the C++ build toolchain and JUCE Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype-dev libfontconfig1-dev
+      - run: node .githooks/run-checks.mjs
+  windows-build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the standalone app
+        run: |
+          cmake -S drumbox -B drumbox/build/win -DCMAKE_BUILD_TYPE=Release
+          cmake --build drumbox/build/win --config Release --target DrumBox
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DrumBox-windows
+          path: drumbox/build/win/DrumBox_artefacts/Release/Drum Box.exe
+          if-no-files-found: error
+  # No branch protection is possible on a private repository on the free plan
+  # (GitHub.com's "Merge" button stays unconditional): only an after-the-fact
+  # alert is possible. Triggers only on a push to the main branch (not on
+  # pull/merge requests) and only if `checks` failed; opens no duplicate if an
+  # equivalent issue is already open.
+  alert-if-ci-broken:
+    needs: checks
+    if: always() && github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch) && needs.checks.result == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Open an issue if CI breaks on the main branch
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          title="CI broken on the main branch (run ${{ github.run_id }})"
+          open=$(gh issue list --repo "${{ github.repository }}" --search "CI broken on the main branch in:title" --state open --json number --jq 'length')
+          if [ "$open" = "0" ]; then
+            gh issue create --repo "${{ github.repository }}" --title "$title" \
+              --body "The \`checks\` job failed on the main branch (${{ github.event.repository.default_branch }}). See ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}. To fix before any new workstream."
+          else
+            echo "A broken-CI issue is already open, no duplicate."
+          fi

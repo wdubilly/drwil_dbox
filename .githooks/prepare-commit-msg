@@ -1,0 +1,7 @@
+#!/bin/sh
+# Scope gate (.githooks/scope-gate.mjs): adds "Drwil-Brief: <active brief>" to the message,
+# so that CI replays the commit against that brief's scope. Git never skips this hook, even
+# with the option that skips pre-commit. Never blocks: without node or an active brief,
+# nothing is added and CI will refuse a commit outside briefs without a trailer.
+command -v node >/dev/null 2>&1 || exit 0
+exec node "$(dirname "$0")/scope-gate.mjs" --trailer "$1"

@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "contract": "APP-001",
+  "status": "ATTESTED",
+  "attestedAt": "2026-10-21T20:22:06.870Z",
+  "actor": {
+    "name": "Wilfried Dubilly",
+    "source": "git config user.name, declarative"
+  },
+  "note": null,
+  "fingerprint": "c1605ab9d7a5e62fb1b5f22dd804db2f1e74db3d52045aa6e984297c024227d6",
+  "proof": {},
+  "commit": "65e7224cae12cbc46d95a75556e74821399cdafb",
+  "automated": []
+}

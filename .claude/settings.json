@@ -1,0 +1,179 @@
+{
+  "_comment": "Claude Code settings shared by the team (versioned). Personal preferences — plugins, exemptions — go into .claude/settings.local.json, gitignored. MODEL: an allowed shell verb is NOT necessarily harmless — a verb's sub-options (git -c core.sshCommand=…, git --upload-pack=…, find -exec, rg --pre) escalate an allowed verb into arbitrary command execution. So: allow for the verbs really used every day, ask for what rewrites history or touches the outside world, deny for the dangerous sub-options. Evaluation order: deny → ask → allow, first match wins; deny ALWAYS beats allow. The git denies neutralise the known levers of arbitrary execution (--upload-pack / --receive-pack run a command on the \"remote\" side, --ext-diff, --exec-path, and the catch-all '-c <key>=<value>' that covers core.sshCommand / core.pager / core.fsmonitor / protocol.ext / alias=!cmd) — at the cost of also blocking a benign 'git -c user.email=…', which is acceptable here. This '-c' is refused when it directly follows git ('git -c *'), not anywhere: a '*' replaces any text, and a 'git *-c *' pattern also refused creating a branch or reusing a commit message, options of the subcommand. Placed after another global option (git -C dir -c …), it matches no allow, all subcommand prefixes: Claude asks for approval. defaultMode 'default' already makes Claude ask for any unlisted Bash. NOTE: never put a bare 'Bash' in 'ask' — it matches every command and would make the allows below unreachable. NOTE: shell metacharacters (| ; && $() ``) CANNOT be handled here: Claude Code splits a compound command on the operators and matches each subcommand, so the operator never appears in the matched string and a 'Bash(*|*)' rule never matches. That is the role of the PreToolUse hook .claude/hooks/bash-guard.mjs, which sees the raw command and makes Claude ask for approval (never a flat refusal) on a secrets file or a pipe into a shell; the Read(…) rules of 'ask' cover reading the same files with the Read, Grep and Glob tools, which the Bash hook does not see. The .claude/hooks/scope-reminder.mjs hook applies scoping on the agent side: in PreToolUse it refuses writing a code file outside any brief when .drwil/ia-first.json -> scopeReminder is \"blocking\" (default); in PostToolUse it only emits a reminder in \"warning\" (docs/projects/kit-mechanics.md). Stack commands (allow): added automatically from the technology detected at install time (STACK_ALLOW in the kit's source code); to complete by hand for an unrecognised stack.",
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.githooks/state.mjs\""
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.githooks/state.mjs\" reminder"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-hook.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/bash-guard.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/scope-reminder.mjs\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "AskUserQuestion",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/prompt-hook.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/scope-reminder.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Read|Grep|Glob|WebFetch",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/id-glossary.mjs\""
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"${CLAUDE_PROJECT_DIR}/.claude/hooks/reply-glossary.mjs\""
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(rg:*)",
+      "Bash(grep:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(wc:*)",
+      "Bash(sort:*)",
+      "Bash(cut:*)",
+      "Bash(tr:*)",
+      "Bash(diff:*)",
+      "Bash(jq:*)",
+      "Bash(find:*)",
+      "Bash(mkdir:*)",
+      "Bash(git status)",
+      "Bash(git status:*)",
+      "Bash(git branch:*)",
+      "Bash(git log:*)",
+      "Bash(git diff:*)",
+      "Bash(git show:*)",
+      "Bash(git remote:*)",
+      "Bash(git rev-parse:*)",
+      "Bash(git for-each-ref:*)",
+      "Bash(git tag:*)",
+      "Bash(git fetch:*)",
+      "Bash(git pull:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git switch:*)",
+      "Bash(git restore:*)",
+      "Bash(git stash:*)",
+      "Bash(git reset:*)",
+      "Bash(node .githooks/run-checks.mjs)"
+    ],
+    "ask": [
+      "Bash(git merge:*)",
+      "Bash(git rebase:*)",
+      "Bash(git push:*)",
+      "Bash(rm -rf:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker exec:*)",
+      "Bash(ssh:*)",
+      "Bash(scp:*)",
+      "Bash(rsync:*)",
+      "Read(**/.env)",
+      "Read(**/.env.local)",
+      "Read(**/.env.prod)",
+      "Read(**/id_rsa*)",
+      "Read(**/id_ed25519*)",
+      "Read(**/id_ecdsa*)",
+      "Read(**/*.pem)",
+      "Read(**/*.p12)",
+      "Read(**/*.pfx)",
+      "Read(**/*.jks)",
+      "Read(**/.netrc)",
+      "Read(**/.pgpass)"
+    ],
+    "deny": [
+      "Bash(*prompt-hook*)",
+      "Bash(git *--no-verify*)",
+      "Bash(git commit -n*)",
+      "Bash(git commit * -n*)",
+      "Edit(**/.drwil/state.json)",
+      "Write(**/.drwil/state.json)",
+      "Bash(*.drwil/state.json*)",
+      "Bash(git -c *)",
+      "Bash(git *--exec-path*)",
+      "Bash(git *--ext-diff*)",
+      "Bash(git *--receive-pack*)",
+      "Bash(git *--upload-pack*)",
+      "Bash(find *-delete*)",
+      "Bash(find *-exec*)",
+      "Bash(find *-execdir*)",
+      "Bash(find *-fprint*)",
+      "Bash(find *-okdir*)",
+      "Bash(rg *--pre*)",
+      "Bash(rg *--search-zip*)",
+      "Bash(sort *--compress-program*)",
+      "Bash(cat *.netrc)",
+      "Bash(cat *.pgpass)"
+    ],
+    "defaultMode": "default"
+  }
+}

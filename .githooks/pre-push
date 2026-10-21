@@ -1,0 +1,40 @@
+#!/bin/sh
+# Same checks as at commit time (.githooks/pre-commit), replayed at push time:
+# catches a commit made with `--no-verify`, or a pre-commit hook not yet
+# enabled on this machine. Git for Windows also runs this script through its sh.
+if ! command -v node >/dev/null 2>&1; then
+  echo "[ia-first] node introuvable / not found : contrôles non exécutés, push refusé / checks not run, push refused." >&2
+  exit 1
+fi
+
+# QUA-017 must never block a push of tags only (it touches no branch). Standard
+# protocol of the pre-push hook: one line per pushed reference on standard input,
+# `<local ref> <local sha1> <remote ref> <remote sha1>` — the only reliable source
+# of what is actually pushed (unlike the current branch, unchanged during a tag
+# push). A remote branch deletion (local SHA made of zeros) does not touch the
+# main branch either; deleting the main branch is left to the host's branch
+# protection. As soon as a pushed reference is neither a tag nor a deletion
+# (e.g. mixed push + branch), the check applies normally, to be safe.
+any_ref=0
+tags_only=1
+no_branch=1
+while IFS=' ' read -r local_ref local_sha1 remote_ref remote_sha1; do
+  any_ref=1
+  case "$local_sha1" in
+    *[!0]*) deletion=0 ;;
+    *) deletion=1 ;;
+  esac
+  case "$remote_ref" in
+    refs/tags/*) ;;
+    *) tags_only=0
+       [ "$deletion" = "1" ] || no_branch=0 ;;
+  esac
+done
+
+if [ "$any_ref" = "1" ] && [ "$tags_only" = "1" ]; then
+  DRWIL_PUSH_TAGS_ONLY=1 exec node "$(dirname "$0")/run-checks.mjs"
+fi
+if [ "$any_ref" = "1" ] && [ "$no_branch" = "1" ]; then
+  DRWIL_PUSH_NO_BRANCH=1 exec node "$(dirname "$0")/run-checks.mjs"
+fi
+exec node "$(dirname "$0")/run-checks.mjs"
