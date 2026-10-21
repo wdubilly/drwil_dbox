@@ -62,6 +62,9 @@ void Sequencer::run (PatternAt&& patternAt, PositionAt&& positionAt, int numSamp
             for (int v = 0; v < pluckVoices; ++v)
                 if (const int note = pattern.getPluckNote (step, v); note != noNote)
                     notes->push_back ({ offset, Instrument::Pluck, note, pattern.getPluckAccent (step), gate });
+            for (int row = 0; row < numFxRows; ++row)
+                if (const auto state = pattern.getFx (row, step); state != StepState::Off)
+                    notes->push_back ({ offset, Instrument::Fx, row, state == StepState::Accent, gate });
         }
         ++nextStep;
     }

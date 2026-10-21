@@ -1012,6 +1012,198 @@ TEST ("DBX-027 the engine plays the pluck of the chain's second pattern", {
     CHECK (peak (second, 0, 3000) > 0.05f);
 })
 
+namespace
+{
+// One FX hit at step 0, rendered through the whole engine
+std::vector<float> renderFx (int row, StepState state, int samples = 66150)
+{
+    DrumEngine e;
+    e.prepare (sampleRate);
+    e.getPattern().setFx (row, 0, state);
+    e.setPlaying (true);
+    return renderEngine (e, samples);
+}
+
+double crossingsPerSecond (const std::vector<float>& v, size_t from, size_t to)
+{
+    int crossings = 0;
+    for (size_t i = from + 1; i < to; ++i)
+        if ((v[i - 1] < 0) != (v[i] < 0))
+            ++crossings;
+    return crossings / ((to - from) / sampleRate);
+}
+
+double rms (const std::vector<float>& v, size_t from, size_t to)
+{
+    double sum = 0.0;
+    for (size_t i = from; i < to; ++i)
+        sum += v[i] * v[i];
+    return std::sqrt (sum / static_cast<double> (to - from));
+}
+
+struct FxFeatures
+{
+    double crossings;
+    double seconds;
+    std::vector<float> wave;
+};
+
+FxFeatures analyseFx (int row)
+{
+    FxFeatures f;
+    f.wave = renderFx (row, StepState::Accent, 44100);
+    const float top = peak (f.wave);
+    size_t last = 0;
+    for (size_t i = 0; i < f.wave.size(); ++i)
+        if (std::fabs (f.wave[i]) > top * 0.01f)
+            last = i;
+    f.crossings = crossingsPerSecond (f.wave, 0, last + 1);
+    f.seconds = last / sampleRate;
+    return f;
+}
+} // namespace
+
+TEST ("DBX-030 each of the six FX sounds produces a sound that ends", {
+    for (int row = 0; row < numFxSounds; ++row)
+    {
+        const auto wave = renderFx (row, StepState::Normal);
+        CHECK (peak (wave) > 0.05f);
+        CHECK (peak (wave) <= 1.0f);
+        CHECK (peak (wave, 55000) == 0.0f);
+        for (float v : wave)
+            CHECK (std::isfinite (v));
+    }
+})
+
+TEST ("DBX-030 the six FX sounds differ from each other in waveform, pitch content and length", {
+    std::vector<FxFeatures> all;
+    for (int row = 0; row < numFxSounds; ++row)
+        all.push_back (analyseFx (row));
+
+    for (int a = 0; a < numFxSounds; ++a)
+        for (int b = a + 1; b < numFxSounds; ++b)
+        {
+            CHECK (correlation (all[a].wave, all[b].wave) < 0.5);
+            const double distance = std::fabs (std::log (all[a].crossings / all[b].crossings))
+                                  + std::fabs (std::log (all[a].seconds / all[b].seconds));
+            if (distance <= 0.15)
+                std::cerr << "  FX " << a << " and " << b << " too close: " << distance << "\n";
+            CHECK (distance > 0.15);
+        }
+})
+
+TEST ("DBX-030 the siren sweeps up then down, the riser rises and the whoosh is short noise", {
+    const auto siren = renderFx (Siren, StepState::Normal);
+    const size_t q = static_cast<size_t> (sampleRate * 0.15);
+    const double start = crossingsPerSecond (siren, 0, q);
+    const double top = crossingsPerSecond (siren, static_cast<size_t> (sampleRate * 0.225), static_cast<size_t> (sampleRate * 0.375));
+    const double end = crossingsPerSecond (siren, static_cast<size_t> (sampleRate * 0.525), static_cast<size_t> (sampleRate * 0.675));
+    CHECK (top > 1.4 * start);
+    CHECK (top > 1.4 * end);
+
+    const auto riser = renderFx (Riser, StepState::Normal);
+    CHECK (rms (riser, static_cast<size_t> (sampleRate * 0.6), static_cast<size_t> (sampleRate * 0.8))
+           > 3.0 * rms (riser, 0, static_cast<size_t> (sampleRate * 0.2)));
+
+    const auto whoosh = renderFx (Whoosh, StepState::Normal);
+    CHECK (peak (whoosh, static_cast<size_t> (sampleRate * 0.25)) == 0.0f);
+    CHECK (crossingsPerSecond (whoosh, 0, static_cast<size_t> (sampleRate * 0.15)) > 8000.0);
+})
+
+TEST ("DBX-030 an accented FX hit is louder than a normal one and an off step is silent", {
+    for (int row = 0; row < numFxSounds; ++row)
+    {
+        CHECK (peak (renderFx (row, StepState::Accent)) > peak (renderFx (row, StepState::Normal)) * 1.3f);
+        CHECK (peak (renderFx (row, StepState::Off)) == 0.0f);
+    }
+})
+
+TEST ("DBX-030 the FX do not change the sound of the other tracks", {
+    auto play = [] (bool withFx)
+    {
+        DrumEngine e;
+        e.prepare (sampleRate);
+        e.getPattern().set (Kick, 0, StepState::Normal);
+        e.getPattern().setBass (0, 40);
+        e.getPattern().setSynthNote (0, 0, 57);
+        e.getPattern().setPluckNote (0, 0, 62);
+        if (withFx)
+            e.getPattern().setFx (Whoosh, 8, StepState::Normal); // after the window compared below
+        e.setPlaying (true);
+        return renderEngine (e, 5512 * 4);
+    };
+    CHECK (play (false) == play (true));
+})
+
+TEST ("DBX-031 each pattern holds its own FX steps and clears them", {
+    Song song;
+    song.pattern (4).setFx (Laser, 7, StepState::Accent);
+    song.pattern (4).set (Kick, 7, StepState::Normal);
+    CHECK (song.pattern (4).getFx (Laser, 7) == StepState::Accent);
+    CHECK (song.pattern (4).getFx (Laser, 6) == StepState::Off);
+    CHECK (song.pattern (4).getFx (Siren, 7) == StepState::Off);
+    CHECK (song.pattern (4).get (Kick, 7) == StepState::Normal);
+    CHECK (song.pattern (5).getFx (Laser, 7) == StepState::Off);
+    CHECK (song.pattern (4).cycleFx (Impact, 0) == StepState::Normal);
+    CHECK (song.pattern (4).cycleFx (Impact, 0) == StepState::Accent);
+    CHECK (song.pattern (4).cycleFx (Impact, 0) == StepState::Off);
+    song.pattern (4).clear();
+    CHECK (song.pattern (4).getFx (Laser, 7) == StepState::Off);
+})
+
+TEST ("DBX-031 the chain plays the FX steps of each pattern in time", {
+    auto seq = makeSequencer (120.0, 0.0);
+    Song song;
+    song.pattern (0).setFx (Siren, 0, StepState::Normal);
+    song.pattern (3).setFx (Scratch, 4, StepState::Accent);
+    song.setChainLength (2);
+    song.setChainEntry (0, 0);
+    song.setChainEntry (1, 3);
+
+    struct Fired { long long sample; int row; bool accent; };
+    std::vector<Fired> fired;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    long long done = 0;
+    const long long total = 5512LL * 16 * 3 + 100;
+    while (done < total)
+    {
+        const int n = 477;
+        out.clear();
+        notes.clear();
+        seq.process (song, n, out, notes);
+        CHECK (out.empty());
+        for (auto& ev : notes)
+            if (ev.instrument == Instrument::Fx)
+                fired.push_back ({ done + ev.sampleOffset, ev.note, ev.accent });
+        done += n;
+    }
+    const double step = 5512.5;
+    const long long expected[] = { 0, std::llround (20 * step), std::llround (32 * step) };
+    const int rows[] = { Siren, Scratch, Siren };
+    const bool accents[] = { false, true, false };
+    CHECK (fired.size() == 3);
+    for (size_t i = 0; i < std::min<size_t> (fired.size(), 3); ++i)
+        CHECK (std::llabs (fired[i].sample - expected[i]) <= 1 && fired[i].row == rows[i] && fired[i].accent == accents[i]);
+})
+
+TEST ("DBX-031 the engine plays the FX of the chain's second pattern", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    auto& song = e.getSong();
+    song.pattern (2).setFx (Impact, 0, StepState::Normal);
+    song.setChainLength (2);
+    song.setChainEntry (0, 1); // empty pattern: silence
+    song.setChainEntry (1, 2);
+    e.setTempo (240.0);
+    e.setPlaying (true);
+    const int stepSamples = static_cast<int> (sampleRate * 60.0 / 240.0 / 4.0);
+    const auto first = renderEngine (e, stepSamples * 16);
+    CHECK (peak (first) == 0.0f);
+    const auto second = renderEngine (e, stepSamples * 16);
+    CHECK (peak (second, 0, 3000) > 0.05f);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";

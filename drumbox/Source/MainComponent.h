@@ -13,7 +13,8 @@
 class StepButton : public juce::Button
 {
 public:
-    StepButton (drumbox::Song& songToEdit, const int& editedPattern, int trackIndex, int stepIndex);
+    // A drum track, or a row of the FX track when isFxRow is set.
+    StepButton (drumbox::Song& songToEdit, const int& editedPattern, int trackIndex, int stepIndex, bool isFxRow = false);
 
     void setCurrent (bool isCurrent);
     void paintButton (juce::Graphics&, bool highlighted, bool down) override;
@@ -25,6 +26,7 @@ private:
     drumbox::Song& song;
     const int& editing;
     int track, step;
+    bool fx;
     bool current = false;
 };
 
@@ -93,7 +95,7 @@ public:
     void resized() override;
 
 private:
-    enum View { Drums = 0, Bass, Pad, Pluck, Chain, numViews };
+    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, numViews };
 
     struct Knob
     {
@@ -130,6 +132,8 @@ private:
 
     std::array<juce::Label, drumbox::numTracks> trackLabels;
     std::array<std::unique_ptr<StepButton>, drumbox::numTracks * drumbox::numSteps> steps;
+    std::array<juce::Label, drumbox::numFxRows> fxLabels;
+    std::array<std::unique_ptr<StepButton>, drumbox::numFxRows * drumbox::numSteps> fxSteps;
     std::array<std::unique_ptr<NoteButton>, drumbox::numSteps> bassSteps;
     std::array<std::unique_ptr<NoteButton>, drumbox::synthVoices * drumbox::numSteps> synthSteps;
     std::array<juce::Label, drumbox::synthVoices> synthSlotLabels;

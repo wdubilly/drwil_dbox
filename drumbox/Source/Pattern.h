@@ -9,6 +9,7 @@ namespace drumbox
 {
 constexpr int numSteps = 16;
 constexpr int numTracks = 8;
+constexpr int numFxRows = 6;
 constexpr int synthVoices = 4;
 constexpr int pluckVoices = 4;
 constexpr int numPatterns = 16;
@@ -84,9 +85,30 @@ public:
     void setPluckAccent (int step, bool accent) noexcept { pluckAccents[(size_t) step].store (accent, std::memory_order_relaxed); }
     bool getPluckAccent (int step) const noexcept { return pluckAccents[(size_t) step].load (std::memory_order_relaxed); }
 
+    // FX: one off/normal/accent step row per sound effect.
+    void setFx (int row, int step, StepState state) noexcept
+    {
+        fxCells[fxIndex (row, step)].store (static_cast<std::uint8_t> (state), std::memory_order_relaxed);
+    }
+    StepState getFx (int row, int step) const noexcept
+    {
+        return static_cast<StepState> (fxCells[fxIndex (row, step)].load (std::memory_order_relaxed));
+    }
+    StepState cycleFx (int row, int step) noexcept
+    {
+        const auto current = getFx (row, step);
+        const auto next = current == StepState::Off ? StepState::Normal
+                        : current == StepState::Normal ? StepState::Accent
+                                                       : StepState::Off;
+        setFx (row, step, next);
+        return next;
+    }
+
     void clear() noexcept
     {
         for (auto& c : cells)
+            c.store (0, std::memory_order_relaxed);
+        for (auto& c : fxCells)
             c.store (0, std::memory_order_relaxed);
         for (int s = 0; s < numSteps; ++s)
         {
@@ -103,6 +125,8 @@ public:
 private:
     static constexpr int index (int track, int step) noexcept { return track * numSteps + step; }
 
+    static size_t fxIndex (int row, int step) noexcept { return static_cast<size_t> (std::clamp (row, 0, numFxRows - 1) * numSteps + step); }
+
     static std::uint8_t clampNote (int note) noexcept
     {
         return note == noNote ? std::uint8_t { 0 } : static_cast<std::uint8_t> (std::clamp (note, lowestNote, highestNote));
@@ -112,6 +136,7 @@ private:
     static size_t pluckIndex (int step, int slot) noexcept { return static_cast<size_t> (step * pluckVoices + slot); }
 
     std::array<std::atomic<std::uint8_t>, numTracks * numSteps> cells;
+    std::array<std::atomic<std::uint8_t>, numFxRows * numSteps> fxCells;
     std::array<std::atomic<std::uint8_t>, numSteps> bassNotes;
     std::array<std::atomic<bool>, numSteps> bassAccents;
     std::array<std::atomic<std::uint8_t>, numSteps * synthVoices> synthNotes;

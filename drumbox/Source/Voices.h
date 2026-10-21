@@ -45,6 +45,52 @@ private:
     float bandState1 = 0.0f, bandState2 = 0.0f;
 };
 
+enum FxSound : int
+{
+    Siren = 0,
+    Laser,
+    Riser,
+    Impact,
+    Whoosh,
+    Scratch
+};
+
+constexpr int numFxSounds = 6;
+constexpr std::array<const char*, numFxSounds> fxNames { "SIREN", "LASER", "RISER", "IMPACT", "WHOOSH", "SCRATCH" };
+
+// One synthesised sound effect; retriggering restarts it.
+class FxVoice
+{
+public:
+    void prepare (double newSampleRate, FxSound newSound) noexcept;
+    void trigger (float gain) noexcept;
+    bool isActive() const noexcept { return active; }
+    float next() noexcept;
+
+private:
+    float noise() noexcept;
+
+    FxSound sound = Siren;
+    double sampleRate = 44100.0;
+    bool active = false;
+    float gain = 1.0f;
+    std::uint32_t seed = 33333u;
+    double time = 0.0; // seconds since trigger
+    double phaseA = 0.0, phaseB = 0.0;
+    float lowState1 = 0.0f, lowState2 = 0.0f;
+};
+
+class FxBank
+{
+public:
+    void prepare (double sampleRate) noexcept;
+    void trigger (int sound, float gain) noexcept;
+    float next() noexcept;
+
+private:
+    std::array<FxVoice, numFxSounds> voices;
+};
+
 class VoiceBank
 {
 public:

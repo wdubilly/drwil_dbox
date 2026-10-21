@@ -134,6 +134,124 @@ float Voice::next() noexcept
     return out * gain;
 }
 
+void FxVoice::prepare (double newSampleRate, FxSound newSound) noexcept
+{
+    sampleRate = newSampleRate;
+    sound = newSound;
+    active = false;
+    seed = 33333u + static_cast<std::uint32_t> (newSound) * 6151u;
+}
+
+void FxVoice::trigger (float newGain) noexcept
+{
+    gain = newGain;
+    time = 0.0;
+    phaseA = phaseB = 0.0;
+    lowState1 = lowState2 = 0.0f;
+    active = true;
+}
+
+float FxVoice::noise() noexcept
+{
+    seed = seed * 1664525u + 1013904223u;
+    return static_cast<float> (static_cast<std::int32_t> (seed)) / 2147483648.0f;
+}
+
+float FxVoice::next() noexcept
+{
+    if (! active)
+        return 0.0f;
+
+    const double dt = 1.0 / sampleRate;
+    float out = 0.0f;
+    double length = 0.5;
+
+    switch (sound)
+    {
+        case Siren:
+        {
+            // pitch glides up then down once per second, like an emergency vehicle
+            length = 1.2;
+            const double sweep = 0.5 - 0.5 * std::cos (twoPi * time / 0.6);
+            phaseA += (500.0 + 700.0 * sweep) * dt;
+            const float tone = 0.7f * static_cast<float> (std::sin (twoPi * phaseA)) + 0.3f * static_cast<float> (std::sin (2.0 * twoPi * phaseA));
+            out = 0.8f * tone * static_cast<float> (std::min (1.0, std::min (time / 0.02, (length - time) / 0.05)));
+            break;
+        }
+        case Laser:
+        {
+            length = 0.3;
+            phaseA += (180.0 + 3000.0 * std::exp (-time * 22.0)) * dt;
+            const double saw = 2.0 * (phaseA - std::floor (phaseA)) - 1.0;
+            out = 0.7f * static_cast<float> (saw) * decay (time, 0.25);
+            break;
+        }
+        case Riser:
+        {
+            // noise opening up while it gets louder, cut at its peak
+            length = 0.9;
+            const float cutoff = static_cast<float> (0.02 + 0.5 * time / length);
+            lowState1 += cutoff * (noise() - lowState1);
+            lowState2 += cutoff * (lowState1 - lowState2);
+            const float rise = static_cast<float> (time / length);
+            out = 2.4f * lowState2 * rise * rise * static_cast<float> (std::min (1.0, (length - time) / 0.01));
+            break;
+        }
+        case Impact:
+        {
+            length = 0.7;
+            phaseA += (42.0 + 80.0 * std::exp (-time * 12.0)) * dt;
+            lowState1 += 0.08f * (noise() - lowState1);
+            out = (0.85f * static_cast<float> (std::sin (twoPi * phaseA)) + 1.6f * lowState1) * decay (time, 0.7);
+            break;
+        }
+        case Whoosh:
+        {
+            length = 0.18;
+            const double shape = std::sin (3.141592653589793 * time / length);
+            out = 0.7f * noise() * static_cast<float> (shape * shape);
+            break;
+        }
+        case Scratch:
+        {
+            // a saw dragged back and forth, roughened with noise
+            length = 0.28;
+            phaseA += (260.0 + 220.0 * std::sin (twoPi * 9.0 * time)) * dt;
+            const double saw = 2.0 * (phaseA - std::floor (phaseA)) - 1.0;
+            const float raw = 0.7f * static_cast<float> (saw) + 0.5f * noise();
+            lowState1 += 0.35f * (raw - lowState1);
+            const double drag = 0.5 + 0.5 * std::fabs (std::sin (twoPi * 4.5 * time));
+            out = 0.9f * lowState1 * static_cast<float> (drag) * static_cast<float> (std::min (1.0, (length - time) / 0.03));
+            break;
+        }
+    }
+
+    time += dt;
+    if (time > length)
+        active = false;
+    return out * gain;
+}
+
+void FxBank::prepare (double sampleRate) noexcept
+{
+    for (int i = 0; i < numFxSounds; ++i)
+        voices[static_cast<size_t> (i)].prepare (sampleRate, static_cast<FxSound> (i));
+}
+
+void FxBank::trigger (int sound, float gain) noexcept
+{
+    if (sound >= 0 && sound < numFxSounds)
+        voices[static_cast<size_t> (sound)].trigger (gain);
+}
+
+float FxBank::next() noexcept
+{
+    float sum = 0.0f;
+    for (auto& v : voices)
+        sum += v.next();
+    return sum;
+}
+
 void VoiceBank::prepare (double sampleRate) noexcept
 {
     for (int i = 0; i < 8; ++i)
