@@ -25,6 +25,7 @@ otherwise.
 
 ## Projects
 
+- [ ] [decision] [P1] Drum box, track view, mute, solo and track volume: `docs/projects/drum-box-mixer.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines
