@@ -10,6 +10,7 @@ namespace drumbox
 constexpr int numSteps = 16;
 constexpr int numTracks = 8;
 constexpr int synthVoices = 4;
+constexpr int pluckVoices = 4;
 constexpr int numPatterns = 16;
 constexpr int maxChainLength = 128;
 constexpr int lowestNote = 24;  // C1
@@ -71,6 +72,18 @@ public:
     void setSynthAccent (int step, bool accent) noexcept { synthAccents[(size_t) step].store (accent, std::memory_order_relaxed); }
     bool getSynthAccent (int step) const noexcept { return synthAccents[(size_t) step].load (std::memory_order_relaxed); }
 
+    // Pluck: up to pluckVoices notes per step, one per slot; noNote leaves the slot empty.
+    void setPluckNote (int step, int slot, int note) noexcept
+    {
+        pluckNotes[pluckIndex (step, slot)].store (clampNote (note), std::memory_order_relaxed);
+    }
+    int getPluckNote (int step, int slot) const noexcept
+    {
+        return pluckNotes[pluckIndex (step, slot)].load (std::memory_order_relaxed);
+    }
+    void setPluckAccent (int step, bool accent) noexcept { pluckAccents[(size_t) step].store (accent, std::memory_order_relaxed); }
+    bool getPluckAccent (int step) const noexcept { return pluckAccents[(size_t) step].load (std::memory_order_relaxed); }
+
     void clear() noexcept
     {
         for (auto& c : cells)
@@ -81,6 +94,9 @@ public:
             setSynthAccent (s, false);
             for (int v = 0; v < synthVoices; ++v)
                 setSynthNote (s, v, noNote);
+            setPluckAccent (s, false);
+            for (int v = 0; v < pluckVoices; ++v)
+                setPluckNote (s, v, noNote);
         }
     }
 
@@ -93,11 +109,15 @@ private:
     }
     static size_t synthIndex (int step, int slot) noexcept { return static_cast<size_t> (step * synthVoices + slot); }
 
+    static size_t pluckIndex (int step, int slot) noexcept { return static_cast<size_t> (step * pluckVoices + slot); }
+
     std::array<std::atomic<std::uint8_t>, numTracks * numSteps> cells;
     std::array<std::atomic<std::uint8_t>, numSteps> bassNotes;
     std::array<std::atomic<bool>, numSteps> bassAccents;
     std::array<std::atomic<std::uint8_t>, numSteps * synthVoices> synthNotes;
     std::array<std::atomic<bool>, numSteps> synthAccents;
+    std::array<std::atomic<std::uint8_t>, numSteps * pluckVoices> pluckNotes;
+    std::array<std::atomic<bool>, numSteps> pluckAccents;
 };
 
 // Bank of patterns plus the chain that plays them one after the other, then loops.

@@ -104,6 +104,24 @@
         "drumbox/**",
         ".drwil/ia-first.json"
       ]
+    },
+    {
+      "id": "dbx-026",
+      "name": "DBX-026 four-voice pluck synth, instant attack, quick decay and filter",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-026$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-027",
+      "name": "DBX-027 pattern chain plays the pluck notes in time",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-027$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
     }
   ],
   "scopeReminder": "blocking",

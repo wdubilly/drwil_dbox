@@ -234,4 +234,67 @@ float PolySynth::next (const SynthParams& params) noexcept
     }
     return sum * 0.5f;
 }
+
+void PluckSynth::prepare (double newSampleRate) noexcept
+{
+    sampleRate = newSampleRate;
+    for (auto& v : voices)
+        v = {};
+    counter = 0;
+}
+
+int PluckSynth::activeVoices() const noexcept
+{
+    int n = 0;
+    for (auto& v : voices)
+        n += v.envelope.isActive() ? 1 : 0;
+    return n;
+}
+
+void PluckSynth::noteOn (int note, float gain, int gateSamples) noexcept
+{
+    Voice* target = nullptr;
+    for (auto& v : voices)
+        if (target == nullptr && ! v.envelope.isActive())
+            target = &v;
+    if (target == nullptr)
+    {
+        target = &voices[0];
+        for (auto& v : voices)
+            if (v.age < target->age)
+                target = &v;
+    }
+
+    target->note = note;
+    target->gain = gain;
+    target->age = ++counter;
+    target->phase = 0.0;
+    target->low = target->band = 0.0f;
+    target->envelope = {};
+    target->envelope.noteOn (gateSamples);
+}
+
+float PluckSynth::next (const PluckParams& params) noexcept
+{
+    const auto load = [] (const std::atomic<float>& value) { return value.load (std::memory_order_relaxed); };
+    const float decay = load (params.decay);
+    const float mix = std::clamp (load (params.osc2Mix), 0.0f, 1.0f);
+    // no attack and no sustain: the level falls from its first sample, the gate only cuts a long decay
+    const Envelope::Settings settings { 0.0f, decay, 0.0f, 0.03f };
+
+    float sum = 0.0f;
+    for (auto& v : voices)
+    {
+        if (! v.envelope.isActive())
+            continue;
+        const float level = v.envelope.next (settings, sampleRate);
+        const double dt = noteToFrequency (v.note) / sampleRate;
+        v.phase = advance (v.phase, dt);
+        const float raw = (1.0f - mix) * saw (v.phase, dt) + mix * square (v.phase, dt);
+        // the filter follows the level, so it closes fast along with the decay
+        const double cutoff = load (params.cutoff) * (0.3 + 4.0 * level * level);
+        sum += lowPass (raw, v.low, v.band, cutoff, load (params.resonance), sampleRate) * level * v.gain;
+    }
+    return sum * 0.5f;
+}
 } // namespace drumbox

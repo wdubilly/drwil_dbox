@@ -17,6 +17,7 @@ void DrumEngine::prepare (double sampleRate)
     voices.prepare (sampleRate);
     bass.prepare (sampleRate);
     synth.prepare (sampleRate);
+    pluck.prepare (sampleRate);
     sequencer.reset();
     wasPlaying = false;
     currentStep.store (-1);
@@ -63,11 +64,14 @@ void DrumEngine::render (float* out, int numSamples)
             const float gain = n.accent ? accentGain : normalGain;
             if (n.instrument == Instrument::Bass)
                 bass.noteOn (n.note, gain, n.gateSamples);
-            else
+            else if (n.instrument == Instrument::Synth)
                 synth.noteOn (n.note, gain, n.gateSamples);
+            else
+                pluck.noteOn (n.note, gain, n.gateSamples);
             ++nextNote;
         }
-        const float mix = voices.next() * 0.6f + bass.next (bassParams) * bassLevel + synth.next (synthParams) * synthLevel;
+        const float mix = voices.next() * 0.6f + bass.next (bassParams) * bassLevel + synth.next (synthParams) * synthLevel
+                           + pluck.next (pluckParams) * pluckLevel;
         out[i] = std::clamp (mix, -1.0f, 1.0f);
     }
 }

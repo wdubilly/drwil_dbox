@@ -98,4 +98,37 @@ private:
     double lfoPhase = 0.0;
     std::uint64_t counter = 0;
 };
+// Plucked sounds: four voices with an instant attack, a short decay and a filter that
+// closes quickly on each note. A fifth note steals the oldest voice.
+struct PluckParams
+{
+    std::atomic<float> cutoff { 1400.0f };   // Hz, opening up to several times that on each note
+    std::atomic<float> decay { 0.18f };      // seconds, for the level and the filter
+    std::atomic<float> resonance { 0.3f };   // 0..1
+    std::atomic<float> osc2Mix { 0.4f };     // 0 = saw only, 1 = square only
+};
+
+class PluckSynth
+{
+public:
+    void prepare (double newSampleRate) noexcept;
+    void noteOn (int note, float gain, int gateSamples) noexcept;
+    int activeVoices() const noexcept;
+    float next (const PluckParams& params) noexcept;
+
+private:
+    struct Voice
+    {
+        Envelope envelope;
+        int note = 0;
+        float gain = 1.0f;
+        double phase = 0.0;
+        float low = 0.0f, band = 0.0f;
+        std::uint64_t age = 0;
+    };
+
+    double sampleRate = 44100.0;
+    std::array<Voice, pluckVoices> voices;
+    std::uint64_t counter = 0;
+};
 } // namespace drumbox
