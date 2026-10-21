@@ -25,6 +25,7 @@ void DrumEngine::prepare (double sampleRate)
     bass.prepare (sampleRate);
     synth.prepare (sampleRate);
     pluck.prepare (sampleRate);
+    effects.prepare (sampleRate);
     sequencer.reset();
     wasPlaying = false;
     currentStep.store (-1);
@@ -57,9 +58,11 @@ void DrumEngine::render (float* out, int numSamples)
 
     const bool soloActive = mixer.anySolo();
     std::array<float, numMixerTracks> target;
+    std::array<float, numMixerTracks> sendGain;
     for (int t = 0; t < numMixerTracks; ++t)
     {
         target[static_cast<size_t> (t)] = mixer.targetGain (t, soloActive);
+        sendGain[static_cast<size_t> (t)] = mixer.getSend (t);
         const double ratio = mixer.pitchRatio (t);
         if (t < mixerDrums)
             voices.setPitch (t, ratio);
@@ -106,8 +109,22 @@ void DrumEngine::render (float* out, int numSamples)
         float mix = 0.0f;
         for (size_t d = 0; d < drumOut.size(); ++d)
             mix += drumOut[d] * 0.6f * trackGain[d];
-        mix += bass.next (bassParams) * bassLevel * trackGain[mixerBass] + synth.next (synthParams) * synthLevel * trackGain[mixerPad]
-               + pluck.next (pluckParams) * pluckLevel * trackGain[mixerPluck] + fx.next() * fxLevel * trackGain[mixerFx];
+        const float bassOut = bass.next (bassParams) * bassLevel * trackGain[mixerBass];
+        const float padOut = synth.next (synthParams) * synthLevel * trackGain[mixerPad];
+        const float pluckOut = pluck.next (pluckParams) * pluckLevel * trackGain[mixerPluck];
+        const float fxOut = fx.next() * fxLevel * trackGain[mixerFx];
+        mix += bassOut + padOut + pluckOut + fxOut;
+
+        // the chain takes the dry mix plus each track's send; with every effect off it is bypassed
+        if (effects.anyOn())
+        {
+            float sends = 0.0f;
+            for (size_t d = 0; d < drumOut.size(); ++d)
+                sends += drumOut[d] * 0.6f * trackGain[d] * sendGain[d];
+            sends += bassOut * sendGain[mixerBass] + padOut * sendGain[mixerPad] + pluckOut * sendGain[mixerPluck]
+                     + fxOut * sendGain[mixerFx];
+            mix = effects.process (mix + sends);
+        }
         out[i] = std::clamp (mix, -1.0f, 1.0f);
     }
 }

@@ -1,5 +1,6 @@
 #pragma once
 
+#include "Effects.h"
 #include "Instruments.h"
 #include "Mixer.h"
 #include "Pattern.h"
@@ -37,6 +38,7 @@ public:
     PluckParams& getPluckParams() noexcept { return pluckParams; }
 
     Mixer& getMixer() noexcept { return mixer; }
+    EffectsRack& getEffects() noexcept { return effects; }
 
     void setTempo (double bpm) noexcept { tempoRequest.store (bpm); }
     void setSwing (double percent) noexcept { swingRequest.store (percent); }
@@ -60,6 +62,7 @@ private:
     PolySynth synth;
     PluckSynth pluck;
     Mixer mixer;
+    EffectsRack effects;
     std::array<float, numMixerTracks> trackGain;
     BassParams bassParams;
     SynthParams synthParams;

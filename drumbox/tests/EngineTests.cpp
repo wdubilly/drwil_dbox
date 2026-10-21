@@ -2,10 +2,12 @@
 // only the tests whose name starts with the prefix (each test name carries the
 // ID of the contract it protects).
 #include "../Source/DrumEngine.h"
+#include "../Source/Presets.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -1405,6 +1407,437 @@ TEST ("DBX-029 the tune is limited to 24 semitones and the detune to 100 cents",
     CHECK (std::fabs (m.pitchRatio (0) - std::pow (2.0, 23.0 / 12.0)) < 1.0e-9);
     m.setTune (0, -40.0f);
     CHECK (m.getTune (0) == -24.0f);
+})
+
+namespace
+{
+// A steady sine through the effects chain alone
+std::vector<float> throughRack (EffectsRack& rack, float amplitude, int samples = 22050, bool impulseOnly = false)
+{
+    std::vector<float> out (static_cast<size_t> (samples));
+    for (int i = 0; i < samples; ++i)
+    {
+        const float in = impulseOnly ? (i == 0 ? amplitude : 0.0f)
+                                     : amplitude * static_cast<float> (std::sin (2.0 * 3.14159265358979 * 220.0 * i / sampleRate));
+        out[static_cast<size_t> (i)] = rack.process (in);
+    }
+    return out;
+}
+
+float levelOf (const std::vector<float>& v, size_t from = 0, size_t to = SIZE_MAX)
+{
+    double sum = 0.0;
+    size_t n = 0;
+    for (size_t i = from; i < std::min (to, v.size()); ++i, ++n)
+        sum += static_cast<double> (v[i]) * static_cast<double> (v[i]);
+    return n == 0 ? 0.0f : static_cast<float> (std::sqrt (sum / static_cast<double> (n)));
+}
+
+void turnOnly (EffectsRack& rack, int effect)
+{
+    for (int e = 0; e < numEffects; ++e)
+        rack.settings (e)[0].value->store (e == effect ? 1.0f : 0.0f);
+}
+
+using EngineSetup = std::function<void (DrumEngine&)>;
+
+// Whole engine, playing; the setup runs before the gains settle
+std::vector<float> renderWith (const EngineSetup& setup, int samples = 22050)
+{
+    DrumEngine e;
+    e.prepare (sampleRate);
+    setup (e);
+    renderEngine (e, 512);
+    e.setPlaying (true);
+    return renderEngine (e, samples);
+}
+} // namespace
+
+TEST ("DBX-014 each effect changes the sound when on and leaves it untouched when off", {
+    EffectsRack off;
+    const auto dry = throughRack (off, 0.5f);
+    CHECK (levelOf (dry) > 0.3f);
+    for (int effect = 0; effect < numEffects; ++effect)
+    {
+        EffectsRack rack;
+        turnOnly (rack, effect);
+        const auto wet = throughRack (rack, 0.5f);
+        float difference = 0.0f;
+        for (size_t i = 0; i < dry.size(); ++i)
+            difference = std::max (difference, std::fabs (wet[i] - dry[i]));
+        CHECK (difference > 0.05f);
+        for (float s : wet)
+            CHECK (std::isfinite (s));
+
+        EffectsRack switchedOff;
+        turnOnly (switchedOff, effect);
+        switchedOff.settings (effect)[0].value->store (0.0f);
+        CHECK (! switchedOff.anyOn());
+        CHECK (sameWave (throughRack (switchedOff, 0.5f), dry));
+    }
+})
+
+TEST ("DBX-014 each effect has its on switch and its settings, off by default", {
+    EffectsRack rack;
+    CHECK (! rack.anyOn());
+    for (int effect = 0; effect < numEffects; ++effect)
+    {
+        const auto settings = rack.settings (effect);
+        CHECK (settings.size() >= 4);
+        CHECK (std::string (settings[0].name) == "on");
+        CHECK (settings[0].value->load() == 0.0f);
+        CHECK (std::string (EffectsRack::effectName (effect)).size() > 0);
+    }
+    CHECK (rack.settings (5).empty());
+})
+
+TEST ("DBX-014 the reverb leaves a tail, the delay an echo at its time", {
+    EffectsRack reverb;
+    turnOnly (reverb, 0);
+    const auto tail = throughRack (reverb, 0.5f, 22050, true);
+    CHECK (levelOf (tail, 3000, 12000) > 0.001f);
+
+    EffectsRack dry;
+    CHECK (levelOf (throughRack (dry, 0.5f, 22050, true), 3000, 12000) == 0.0f);
+
+    EffectsRack delay;
+    turnOnly (delay, 1);
+    delay.delay().timeMs.store (200.0f);
+    delay.delay().mix.store (0.5f);
+    const auto echo = throughRack (delay, 0.5f, 22050, true);
+    const size_t at = static_cast<size_t> (0.2 * sampleRate);
+    CHECK (std::fabs (echo[at] - 0.25f) < 0.01f);
+    CHECK (peak (echo, 100, at - 2) == 0.0f);
+    CHECK (peak (echo, at + 2, at + 2000) == 0.0f);
+})
+
+TEST ("DBX-014 the distortion squares the wave, the compressor lowers loud levels only", {
+    EffectsRack none;
+    const auto clean = throughRack (none, 0.5f);
+
+    EffectsRack dist;
+    turnOnly (dist, 2);
+    dist.distortion().drive.store (1.0f);
+    dist.distortion().tone.store (1.0f);
+    const auto driven = throughRack (dist, 0.5f);
+    CHECK (levelOf (driven, 2000) / peak (driven, 2000) > levelOf (clean, 2000) / peak (clean, 2000) + 0.1f);
+
+    EffectsRack comp;
+    turnOnly (comp, 4);
+    comp.compressor().threshold.store (-24.0f);
+    comp.compressor().ratio.store (8.0f);
+    const auto squashed = throughRack (comp, 0.5f);
+    CHECK (peak (squashed, 8000) < 0.6f * peak (clean, 8000));
+
+    const auto quietDry = throughRack (none, 0.02f);
+    EffectsRack quietComp;
+    turnOnly (quietComp, 4);
+    quietComp.compressor().threshold.store (-24.0f);
+    quietComp.compressor().ratio.store (8.0f);
+    const auto quiet = throughRack (quietComp, 0.02f);
+    CHECK (std::fabs (levelOf (quiet, 8000) - levelOf (quietDry, 8000)) < 0.1f * levelOf (quietDry, 8000));
+
+    EffectsRack boosted;
+    turnOnly (boosted, 4);
+    boosted.compressor().makeup.store (12.0f);
+    CHECK (levelOf (throughRack (boosted, 0.02f), 8000) > 3.0f * levelOf (quietDry, 8000));
+})
+
+TEST ("DBX-014 the chorus keeps the level and moves the wave; extreme settings stay finite", {
+    EffectsRack none, chorus;
+    turnOnly (chorus, 3);
+    const auto clean = throughRack (none, 0.5f);
+    const auto wet = throughRack (chorus, 0.5f);
+    CHECK (levelOf (wet, 4000) > 0.6f * levelOf (clean, 4000));
+    CHECK (levelOf (wet, 4000) < 1.4f * levelOf (clean, 4000));
+
+    EffectsRack wild;
+    for (int e = 0; e < numEffects; ++e)
+        for (auto& s : wild.settings (e))
+            s.value->store (s.max * 5.0f + 5.0f);
+    for (float s : throughRack (wild, 0.5f))
+        CHECK (std::isfinite (s));
+})
+
+TEST ("DBX-014 with every effect off the engine sound is as before", {
+    const auto plain = renderWith ([] (DrumEngine& e) { playTracks (e.getPattern(), allTracks()); });
+    const auto tweaked = renderWith ([] (DrumEngine& e) {
+        playTracks (e.getPattern(), allTracks());
+        for (int fx = 0; fx < numEffects; ++fx)
+            for (auto& s : e.getEffects().settings (fx))
+                if (std::string (s.name) != "on")
+                    s.value->store (s.max);
+    });
+    CHECK (sameWave (plain, tweaked));
+    CHECK (peak (plain) > 0.1f);
+    const auto reverbOn = renderWith ([] (DrumEngine& e) {
+        playTracks (e.getPattern(), allTracks());
+        e.getEffects().reverb().on.store (1.0f);
+    });
+    CHECK (! sameWave (plain, reverbOn));
+    for (float s : reverbOn)
+        CHECK (std::fabs (s) <= 1.0f);
+})
+
+TEST ("DBX-015 each of the twelve tracks has a send, 0 by default and kept within 0 to 1", {
+    Mixer m;
+    for (int t = 0; t < numMixerTracks; ++t)
+        CHECK (m.getSend (t) == 0.0f);
+    m.setSend (4, 0.4f);
+    CHECK (m.getSend (4) == 0.4f);
+    CHECK (m.getSend (5) == 0.0f);
+    m.setSend (4, 3.0f);
+    CHECK (m.getSend (4) == maxSend);
+    m.setSend (4, -1.0f);
+    CHECK (m.getSend (4) == 0.0f);
+    m.setSend (99, 0.5f); // unknown tracks are ignored
+    CHECK (m.getSend (99) == 0.0f);
+})
+
+TEST ("DBX-015 the send of each track feeds the master chain", {
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        const auto base = [t] (DrumEngine& e) {
+            playTracks (e.getPattern(), { t });
+            e.getEffects().delay().on.store (1.0f);
+            e.getEffects().delay().timeMs.store (200.0f);
+        };
+        const auto noSend = renderWith (base);
+        const auto sent = renderWith ([&] (DrumEngine& e) { base (e); e.getMixer().setSend (t, 1.0f); });
+        CHECK (peak (noSend) > 0.01f);
+        CHECK (peak (sent) > 1.5f * peak (noSend));
+
+        const auto other = renderWith ([&] (DrumEngine& e) { base (e); e.getMixer().setSend ((t + 1) % numMixerTracks, 1.0f); });
+        CHECK (sameWave (noSend, other));
+    }
+})
+
+TEST ("DBX-015 the chain processes the dry mix plus the sends, and bypassed ignores them", {
+    const auto dryOnly = renderWith ([] (DrumEngine& e) { playTracks (e.getPattern(), { Kick, Snare }); });
+    const auto sendsOff = renderWith ([] (DrumEngine& e) {
+        playTracks (e.getPattern(), { Kick, Snare });
+        e.getMixer().setSend (Kick, 1.0f);
+        e.getMixer().setSend (Snare, 0.5f);
+    });
+    CHECK (sameWave (dryOnly, sendsOff));
+
+    const auto chain = [] (float send) {
+        return renderWith ([send] (DrumEngine& e) {
+            playTracks (e.getPattern(), { Kick });
+            e.getEffects().distortion().on.store (1.0f);
+            e.getEffects().distortion().drive.store (0.2f);
+            e.getMixer().setSend (Kick, send);
+        });
+    };
+    CHECK (! sameWave (chain (0.0f), chain (1.0f)));
+})
+
+TEST ("DBX-015 a muted track sends nothing", {
+    const auto silent = renderWith ([] (DrumEngine& e) {
+        playTracks (e.getPattern(), { Kick });
+        e.getEffects().delay().on.store (1.0f);
+        e.getMixer().setSend (Kick, 1.0f);
+        e.getMixer().setMute (Kick, true);
+    });
+    CHECK (peak (silent) == 0.0f);
+})
+
+namespace
+{
+class MemoryStore : public PresetStore
+{
+public:
+    std::vector<std::string> list (PresetKind kind) override
+    {
+        std::vector<std::string> names;
+        for (const auto& [key, text] : files)
+            if (key.first == kind)
+                names.push_back (key.second);
+        return names;
+    }
+    bool read (PresetKind kind, const std::string& name, std::string& text) override
+    {
+        const auto it = files.find ({ kind, name });
+        if (it == files.end())
+            return false;
+        text = it->second;
+        return true;
+    }
+    bool write (PresetKind kind, const std::string& name, const std::string& text) override
+    {
+        files[{ kind, name }] = text;
+        return true;
+    }
+    std::map<std::pair<PresetKind, std::string>, std::string> files;
+};
+
+std::vector<int> tracksOf (PresetKind kind)
+{
+    switch (kind)
+    {
+        case PresetKind::DrumKit: return { 0, 1, 2, 3, 4, 5, 6, 7 };
+        case PresetKind::Bass: return { mixerBass };
+        case PresetKind::Pad: return { mixerPad };
+        case PresetKind::Pluck: return { mixerPluck };
+        case PresetKind::Fx: return { mixerFx };
+    }
+    return {};
+}
+
+std::vector<float> renderKind (PresetKind kind, const EngineSetup& setup)
+{
+    return renderWith ([&] (DrumEngine& e) {
+        playTracks (e.getPattern(), tracksOf (kind));
+        e.getEffects().delay().on.store (1.0f);
+        e.getEffects().delay().timeMs.store (120.0f);
+        setup (e);
+    });
+}
+
+constexpr PresetKind allKinds[] = { PresetKind::DrumKit, PresetKind::Bass, PresetKind::Pad, PresetKind::Pluck, PresetKind::Fx };
+} // namespace
+
+TEST ("DBX-016 factory presets exist for the drum kit, the bass, the pad, the pluck and the FX", {
+    for (PresetKind kind : allKinds)
+    {
+        const auto& presets = PresetBank::factory (kind);
+        CHECK (presets.size() >= 4);
+        CHECK (presets.front().name == "Default");
+        for (size_t i = 0; i < presets.size(); ++i)
+        {
+            CHECK (isValidPresetName (presets[i].name));
+            CHECK (presets[i].kind == kind);
+            for (size_t j = i + 1; j < presets.size(); ++j)
+                CHECK (presets[i].name != presets[j].name);
+        }
+    }
+})
+
+TEST ("DBX-016 each factory preset changes the sound and the Default one is the sound as before", {
+    for (PresetKind kind : allKinds)
+    {
+        const auto reference = renderKind (kind, [] (DrumEngine&) {});
+        const auto& presets = PresetBank::factory (kind);
+        const auto asDefault = renderKind (kind, [&] (DrumEngine& e) { PresetBank (e).apply (presets.front()); });
+        CHECK (sameWave (reference, asDefault));
+        for (size_t i = 1; i < presets.size(); ++i)
+        {
+            const auto wave = renderKind (kind, [&] (DrumEngine& e) { PresetBank (e).apply (presets[i]); });
+            CHECK (! sameWave (reference, wave));
+            CHECK (peak (wave) > 0.01f);
+            CHECK (peak (wave) <= 1.0f);
+        }
+    }
+})
+
+TEST ("DBX-016 applying Default after another preset restores the starting sound", {
+    for (PresetKind kind : allKinds)
+    {
+        const auto& presets = PresetBank::factory (kind);
+        const auto reference = renderKind (kind, [] (DrumEngine&) {});
+        const auto back = renderKind (kind, [&] (DrumEngine& e) {
+            PresetBank bank (e);
+            bank.apply (presets.back());
+            bank.apply (presets.front());
+        });
+        CHECK (sameWave (reference, back));
+    }
+})
+
+TEST ("DBX-016 a preset only touches the tracks of its kind", {
+    DrumEngine e;
+    PresetBank bank (e);
+    const Preset before = bank.capture (PresetKind::Pad, "x");
+    const Preset kitBefore = bank.capture (PresetKind::DrumKit, "x");
+    bank.apply (PresetBank::factory (PresetKind::Bass)[1]);
+    bank.apply (PresetBank::factory (PresetKind::Pluck)[1]);
+    bank.apply (PresetBank::factory (PresetKind::Fx)[1]);
+    CHECK (bank.capture (PresetKind::Pad, "x").values == before.values);
+    CHECK (bank.capture (PresetKind::DrumKit, "x").values == kitBefore.values);
+    CHECK (e.getBassParams().cutoff.load() != BassParams().cutoff.load());
+})
+
+TEST ("DBX-016 a saved user preset loads back to the same sound", {
+    for (PresetKind kind : allKinds)
+    {
+        MemoryStore store;
+        const auto tweak = [kind] (DrumEngine& e) {
+            for (int t : tracksOf (kind))
+            {
+                e.getMixer().setVolume (t, 0.73f);
+                e.getMixer().setTune (t, 3.0f);
+                e.getMixer().setDetune (t, -17.0f);
+                e.getMixer().setSend (t, 0.35f);
+            }
+            e.getBassParams().cutoff.store (910.0f);
+            e.getSynthParams().cutoff.store (3333.0f);
+            e.getSynthParams().lfoDepth.store (0.4f);
+            e.getPluckParams().decay.store (0.41f);
+        };
+        {
+            DrumEngine e;
+            tweak (e);
+            CHECK (PresetBank (e).saveUser (store, kind, "My Sound"));
+        }
+        CHECK (store.list (kind).size() == 1);
+
+        const auto saved = renderKind (kind, tweak);
+        const auto loaded = renderKind (kind, [&] (DrumEngine& e) { CHECK (PresetBank (e).loadUser (store, kind, "My Sound")); });
+        CHECK (sameWave (saved, loaded));
+        CHECK (! sameWave (loaded, renderKind (kind, [] (DrumEngine&) {})));
+    }
+})
+
+TEST ("DBX-016 user presets are files in a folder and survive a new store", {
+    const std::string folder = "dbx016_user_presets";
+    std::filesystem::remove_all (folder);
+    {
+        DrumEngine e;
+        e.getBassParams().decay.store (0.77f);
+        FolderPresetStore store (folder);
+        CHECK (PresetBank (e).saveUser (store, PresetKind::Bass, "Mine"));
+        CHECK (PresetBank (e).saveUser (store, PresetKind::Bass, "Another-1"));
+        CHECK (PresetBank (e).saveUser (store, PresetKind::Pad, "Mine"));
+    }
+    FolderPresetStore store (folder);
+    CHECK (store.list (PresetKind::Bass).size() == 2);
+    CHECK (store.list (PresetKind::Pad).size() == 1);
+    CHECK (store.list (PresetKind::Pluck).empty());
+    DrumEngine e;
+    CHECK (PresetBank (e).loadUser (store, PresetKind::Bass, "Mine"));
+    CHECK (std::fabs (e.getBassParams().decay.load() - 0.77f) < 1.0e-6f);
+    CHECK (std::filesystem::exists (folder + "/bass/Mine.preset"));
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-016 bad names, missing files and foreign or damaged text are refused and change nothing", {
+    MemoryStore store;
+    DrumEngine e;
+    PresetBank bank (e);
+    for (const char* bad : { "", "../evil", "a/b", "a\\b", ".hidden", " lead", "x:y" })
+    {
+        CHECK (! isValidPresetName (bad));
+        CHECK (! bank.saveUser (store, PresetKind::Bass, bad));
+    }
+    CHECK (! isValidPresetName (std::string (41, 'a')));
+    CHECK (store.files.empty());
+    FolderPresetStore folder ("dbx016_never_written");
+    CHECK (! folder.write (PresetKind::Bass, "../evil", "x"));
+    CHECK (! std::filesystem::exists ("dbx016_never_written"));
+
+    const float cutoff = e.getBassParams().cutoff.load();
+    CHECK (! bank.loadUser (store, PresetKind::Bass, "Nothing"));
+    store.write (PresetKind::Bass, "Junk", "hello");
+    CHECK (! bank.loadUser (store, PresetKind::Bass, "Junk"));
+    CHECK (bank.saveUser (store, PresetKind::Pad, "Pad One"));
+    store.files[{ PresetKind::Bass, "Pad One" }] = store.files[{ PresetKind::Pad, "Pad One" }];
+    CHECK (! bank.loadUser (store, PresetKind::Bass, "Pad One"));
+    CHECK (e.getBassParams().cutoff.load() == cutoff);
+
+    store.write (PresetKind::Bass, "Wild", "drumbox-preset 1\nkind=bass\nname=Wild\nbass.cutoff=999999\nunknown.key=3\ntrack8.volume=-4\n");
+    CHECK (bank.loadUser (store, PresetKind::Bass, "Wild"));
+    CHECK (e.getBassParams().cutoff.load() == 3000.0f);
+    CHECK (e.getMixer().getVolume (mixerBass) == 0.0f);
 })
 
 int main (int argc, char** argv)
