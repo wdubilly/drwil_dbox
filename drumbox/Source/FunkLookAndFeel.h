@@ -10,6 +10,7 @@ const juce::Colour lightWood { 0xff7d4a24 };
 const juce::Colour orange { 0xffe8731a };
 const juce::Colour mustard { 0xffe6b02f };
 const juce::Colour avocado { 0xff8a9a2b };
+const juce::Colour teal { 0xff3f9a94 };
 const juce::Colour cream { 0xfff4e4bd };
 const juce::Colour brownInk { 0xff1f1109 };
 } // namespace drumbox::palette

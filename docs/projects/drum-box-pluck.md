@@ -1,6 +1,6 @@
 # Project: Drum box, pluck synth track
 
-**Status**: started on 2026-10-21 — increments 1 and 2 done (pluck voice, pattern data and chain; `DBX-026`, `DBX-027` pass); increment 3 (interface) next.
+**Status**: 2026-10-21 — increments 1, 2 and 3 done; the app builds on Linux; `DBX-028` waits for the human to try the app and attest.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: none (requested in conversation, framed directly)
@@ -61,6 +61,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): increments 1 and 2 committed together (the pluck voice needs the pattern data to be tested through the engine): `PluckSynth` in `Instruments.*`, pluck notes in `Pattern.h`, `Instrument::Pluck` in the sequencer, `DrumEngine::getPluckParams()`; `DBX-026` and `DBX-027` pass, `DBX-001` to `DBX-009` unchanged.
+- **Last state** (2026-10-21): all three increments committed. Interface: view SYNTH renamed PAD, new PLUCK view (four note rows, cutoff / decay / reso / saw-square knobs) in `MainComponent.*`, teal colour for pluck notes in `FunkLookAndFeel.h`; the starter song has a pluck stab line. The Linux app builds; the Windows build is left to CI.
 - **Uncommitted work**: none.
-- **Next step**: [AI] increment 3 — SYNTH renamed PAD, PLUCK view in `MainComponent.*`; then [human] try the app and attest `DBX-028`.
+- **Next step**: [human] try the app (PAD and PLUCK views) and run `drwil attest` for `DBX-028`; then close the workstream (`node .githooks/close.mjs`).

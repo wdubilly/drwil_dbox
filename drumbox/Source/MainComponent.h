@@ -28,12 +28,12 @@ private:
     bool current = false;
 };
 
-// One note of the bass (slot 0) or of the synth (slot 0 to 3) on one step.
+// One note of the bass (slot 0), of the pad or of the pluck (slot 0 to 3) on one step.
 // Click: on / off. Drag up or down, or mouse wheel: pitch. Right click: accent of the step.
 class NoteButton : public juce::Button
 {
 public:
-    enum class Kind { Bass, Synth };
+    enum class Kind { Bass, Pad, Pluck };
 
     NoteButton (drumbox::Song& songToEdit, const int& editedPattern, Kind kindOfNote, int slotIndex, int stepIndex);
 
@@ -93,7 +93,7 @@ public:
     void resized() override;
 
 private:
-    enum View { Drums = 0, Bass, Synth, Chain, numViews };
+    enum View { Drums = 0, Bass, Pad, Pluck, Chain, numViews };
 
     struct Knob
     {
@@ -133,11 +133,14 @@ private:
     std::array<std::unique_ptr<NoteButton>, drumbox::numSteps> bassSteps;
     std::array<std::unique_ptr<NoteButton>, drumbox::synthVoices * drumbox::numSteps> synthSteps;
     std::array<juce::Label, drumbox::synthVoices> synthSlotLabels;
+    std::array<std::unique_ptr<NoteButton>, drumbox::pluckVoices * drumbox::numSteps> pluckSteps;
+    std::array<juce::Label, drumbox::pluckVoices> pluckSlotLabels;
     std::array<std::unique_ptr<ChainCell>, drumbox::maxChainLength> chainCells;
     juce::Label bassLabel;
     Knob bassCutoff, bassDecay;
     Knob osc2Semitones, osc2Detune, osc2Mix, synthCutoff, synthResonance, synthAttack, synthDecay, synthSustain,
          synthRelease, lfoRate, lfoDepth;
+    Knob pluckCutoff, pluckDecay, pluckResonance, pluckMix;
 
     juce::Rectangle<int> panel;
     int shownStep = -1;

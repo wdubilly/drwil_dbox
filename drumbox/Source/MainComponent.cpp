@@ -68,7 +68,8 @@ NoteButton::NoteButton (Song& songToEdit, const int& editedPattern, Kind kindOfN
 {
     static constexpr int synthDefaults[synthVoices] = { 60, 64, 67, 71 };
     lastNote = kind == Kind::Bass ? 36 : synthDefaults[slot];
-    setTitle ((kind == Kind::Bass ? juce::String ("BASS") : "SYNTH note " + juce::String (slot + 1)) + " step " + juce::String (stepIndex + 1));
+    const juce::String name = kind == Kind::Bass ? "BASS" : (kind == Kind::Pad ? "PAD note " : "PLUCK note ") + juce::String (slot + 1);
+    setTitle (name + " step " + juce::String (stepIndex + 1));
     setMouseCursor (juce::MouseCursor::UpDownResizeCursor);
 }
 
@@ -80,7 +81,9 @@ juce::String NoteButton::noteName (int note)
 
 int NoteButton::getNote() const
 {
-    return kind == Kind::Bass ? pattern().getBassNote (step) : pattern().getSynthNote (step, slot);
+    if (kind == Kind::Bass)
+        return pattern().getBassNote (step);
+    return kind == Kind::Pad ? pattern().getSynthNote (step, slot) : pattern().getPluckNote (step, slot);
 }
 
 void NoteButton::setNote (int note)
@@ -89,21 +92,27 @@ void NoteButton::setNote (int note)
         lastNote = note;
     if (kind == Kind::Bass)
         pattern().setBass (step, note, pattern().getBassAccent (step));
-    else
+    else if (kind == Kind::Pad)
         pattern().setSynthNote (step, slot, note);
+    else
+        pattern().setPluckNote (step, slot, note);
 }
 
 bool NoteButton::getAccent() const
 {
-    return kind == Kind::Bass ? pattern().getBassAccent (step) : pattern().getSynthAccent (step);
+    if (kind == Kind::Bass)
+        return pattern().getBassAccent (step);
+    return kind == Kind::Pad ? pattern().getSynthAccent (step) : pattern().getPluckAccent (step);
 }
 
 void NoteButton::toggleAccent()
 {
     if (kind == Kind::Bass)
         pattern().setBass (step, pattern().getBassNote (step), ! pattern().getBassAccent (step));
-    else
+    else if (kind == Kind::Pad)
         pattern().setSynthAccent (step, ! pattern().getSynthAccent (step));
+    else
+        pattern().setPluckAccent (step, ! pattern().getPluckAccent (step));
 }
 
 void NoteButton::setCurrent (bool isCurrent)
@@ -179,7 +188,7 @@ void NoteButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
 
     juce::Colour fill = beatGroup ? palette::wood.darker (0.4f) : palette::wood.darker (0.1f);
     if (note != noNote)
-        fill = accent ? palette::mustard : (kind == Kind::Bass ? palette::orange : palette::avocado.brighter (0.2f));
+        fill = accent ? palette::mustard : (kind == Kind::Bass ? palette::orange : kind == Kind::Pad ? palette::avocado.brighter (0.2f) : palette::teal);
     if (highlighted)
         fill = fill.brighter (0.12f);
     if (down)
@@ -278,7 +287,7 @@ MainComponent::MainComponent()
     legendLabel.setJustificationType (juce::Justification::centredLeft);
     addAndMakeVisible (legendLabel);
 
-    const char* const viewNames[] = { "DRUMS", "BASS", "SYNTH", "CHAIN" };
+    const char* const viewNames[] = { "DRUMS", "BASS", "PAD", "PLUCK", "CHAIN" };
     for (int v = 0; v < numViews; ++v)
     {
         auto& b = viewButtons[(size_t) v];
@@ -332,14 +341,28 @@ MainComponent::MainComponent()
         addChildComponent (*bassSteps[(size_t) s]);
         for (int v = 0; v < synthVoices; ++v)
         {
-            auto button = std::make_unique<NoteButton> (song, editing, NoteButton::Kind::Synth, v, s);
+            auto button = std::make_unique<NoteButton> (song, editing, NoteButton::Kind::Pad, v, s);
             addChildComponent (*button);
             synthSteps[(size_t) (v * numSteps + s)] = std::move (button);
+        }
+        for (int v = 0; v < pluckVoices; ++v)
+        {
+            auto button = std::make_unique<NoteButton> (song, editing, NoteButton::Kind::Pluck, v, s);
+            addChildComponent (*button);
+            pluckSteps[(size_t) (v * numSteps + s)] = std::move (button);
         }
     }
     for (int v = 0; v < synthVoices; ++v)
     {
         auto& label = synthSlotLabels[(size_t) v];
+        label.setText ("NOTE " + juce::String (v + 1), juce::dontSendNotification);
+        label.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
+        label.setColour (juce::Label::textColourId, palette::cream);
+        addChildComponent (label);
+    }
+    for (int v = 0; v < pluckVoices; ++v)
+    {
+        auto& label = pluckSlotLabels[(size_t) v];
         label.setText ("NOTE " + juce::String (v + 1), juce::dontSendNotification);
         label.setFont (juce::Font (juce::FontOptions (15.0f, juce::Font::bold)));
         label.setColour (juce::Label::textColourId, palette::cream);
@@ -401,6 +424,10 @@ MainComponent::MainComponent()
     addKnob (synthRelease, "RELEASE", 0.01, 3.0, 0.01, 0.25, " s", 0.4);
     addKnob (lfoRate, "LFO RATE", 0.1, 20.0, 0.1, 5.0, " Hz", 3.0);
     addKnob (lfoDepth, "LFO DEPTH", 0.0, 100.0, 1.0, 0.0, " %");
+    addKnob (pluckCutoff, "CUTOFF", 100.0, 8000.0, 10.0, 1400.0, " Hz", 1200.0);
+    addKnob (pluckDecay, "DECAY", 0.03, 1.0, 0.01, 0.18, " s", 0.2);
+    addKnob (pluckResonance, "RESO", 0.0, 100.0, 1.0, 30.0, " %");
+    addKnob (pluckMix, "SAW / SQUARE", 0.0, 100.0, 1.0, 40.0, " %");
 
     auto applyInstrumentParams = [this]
     {
@@ -419,9 +446,15 @@ MainComponent::MainComponent()
         s.release = (float) synthRelease.slider.getValue();
         s.lfoRate = (float) lfoRate.slider.getValue();
         s.lfoDepth = (float) lfoDepth.slider.getValue() / 100.0f;
+        auto& p = engine.getPluckParams();
+        p.cutoff = (float) pluckCutoff.slider.getValue();
+        p.decay = (float) pluckDecay.slider.getValue();
+        p.resonance = (float) pluckResonance.slider.getValue() / 100.0f;
+        p.osc2Mix = (float) pluckMix.slider.getValue() / 100.0f;
     };
     for (auto* k : { &bassCutoff, &bassDecay, &osc2Semitones, &osc2Detune, &osc2Mix, &synthCutoff, &synthResonance,
-                     &synthAttack, &synthDecay, &synthSustain, &synthRelease, &lfoRate, &lfoDepth })
+                     &synthAttack, &synthDecay, &synthSustain, &synthRelease, &lfoRate, &lfoDepth, &pluckCutoff, &pluckDecay,
+                     &pluckResonance, &pluckMix })
         k->slider.onValueChange = applyInstrumentParams;
     applyInstrumentParams();
 
@@ -430,7 +463,7 @@ MainComponent::MainComponent()
 
     viewButtons[Drums].setToggleState (true, juce::dontSendNotification);
     updateTransportButton();
-    setSize (1100, 720);
+    setSize (1180, 720);
     showView (Drums);
     startTimerHz (30);
 }
@@ -494,6 +527,11 @@ void MainComponent::loadStarterSong()
             for (int v = 0; v < synthVoices; ++v)
                 p.setSynthNote (s, v, chord[v] + (root - 33));
         p.setSynthAccent (10, true);
+        const int stab[] = { 69, 72, 76 };
+        for (int s : { 4, 7, 12 })
+            for (int v = 0; v < 3; ++v)
+                p.setPluckNote (s, v, stab[v] + (root - 33));
+        p.setPluckAccent (12, true);
     };
     addLine (pattern, 33);
     addLine (second, 38);
@@ -517,9 +555,12 @@ void MainComponent::showView (View newView)
         l.setVisible (view == Drums);
     show (bassSteps, view == Bass);
     bassLabel.setVisible (view == Bass);
-    show (synthSteps, view == Synth);
+    show (synthSteps, view == Pad);
     for (auto& l : synthSlotLabels)
-        l.setVisible (view == Synth);
+        l.setVisible (view == Pad);
+    show (pluckSteps, view == Pluck);
+    for (auto& l : pluckSlotLabels)
+        l.setVisible (view == Pluck);
     show (chainCells, view == Chain);
     chainLengthLabel.setVisible (view == Chain);
     chainLengthSlider.setVisible (view == Chain);
@@ -531,12 +572,18 @@ void MainComponent::showView (View newView)
     for (auto* k : { &osc2Semitones, &osc2Detune, &osc2Mix, &synthCutoff, &synthResonance, &synthAttack, &synthDecay,
                      &synthSustain, &synthRelease, &lfoRate, &lfoDepth })
     {
-        k->slider.setVisible (view == Synth);
-        k->label.setVisible (view == Synth);
+        k->slider.setVisible (view == Pad);
+        k->label.setVisible (view == Pad);
+    }
+    for (auto* k : { &pluckCutoff, &pluckDecay, &pluckResonance, &pluckMix })
+    {
+        k->slider.setVisible (view == Pluck);
+        k->label.setVisible (view == Pluck);
     }
 
     static const char* const legends[] = {
         "click a step: off / normal / ACCENT",
+        "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click: note on / off   drag up or down, or wheel: pitch   right-click: accent",
         "click a position to give it the selected pattern   LENGTH: positions before the loop"
@@ -589,6 +636,8 @@ void MainComponent::timerCallback()
             bassSteps[(size_t) step]->setCurrent (on && current >= 0);
             for (int v = 0; v < synthVoices; ++v)
                 synthSteps[(size_t) (v * numSteps + step)]->setCurrent (on && current >= 0);
+            for (int v = 0; v < pluckVoices; ++v)
+                pluckSteps[(size_t) (v * numSteps + step)]->setCurrent (on && current >= 0);
         };
         mark (shownStep, false);
         mark (current, true);
@@ -642,7 +691,7 @@ void MainComponent::resized()
     auto area = getLocalBounds().reduced (16);
     auto header = area.removeFromTop (54);
     titleLabel.setBounds (header.removeFromLeft (230));
-    auto tabs = header.removeFromRight (4 * 100 + 12);
+    auto tabs = header.removeFromRight (numViews * 100 + 12);
     for (auto& b : viewButtons)
     {
         b.setBounds (tabs.removeFromLeft (100).reduced (3, 6));
@@ -697,7 +746,7 @@ void MainComponent::resized()
         layoutKnobs (knobs.withWidth (juce::jmin (300, knobs.getWidth())), { &bassCutoff, &bassDecay });
     }
 
-    // synth: four note rows, a row of knobs below
+    // pad: four note rows, a row of knobs below
     {
         const int rowHeight = juce::jmin (56, (inner.getHeight() - 170) / synthVoices);
         for (int v = 0; v < synthVoices; ++v)
@@ -710,6 +759,20 @@ void MainComponent::resized()
         auto knobs = inner.withTrimmedTop (rowHeight * synthVoices + 12);
         layoutKnobs (knobs, { &osc2Semitones, &osc2Detune, &osc2Mix, &synthCutoff, &synthResonance, &synthAttack,
                               &synthDecay, &synthSustain, &synthRelease, &lfoRate, &lfoDepth });
+    }
+
+    // pluck: four note rows, a row of knobs below
+    {
+        const int rowHeight = juce::jmin (56, (inner.getHeight() - 170) / pluckVoices);
+        for (int v = 0; v < pluckVoices; ++v)
+        {
+            const int y = inner.getY() + v * rowHeight;
+            pluckSlotLabels[(size_t) v].setBounds (inner.getX(), y, labelWidth, rowHeight);
+            for (int s = 0; s < numSteps; ++s)
+                pluckSteps[(size_t) (v * numSteps + s)]->setBounds (inner.getX() + labelWidth + s * cellWidth, y, cellWidth, rowHeight);
+        }
+        auto knobs = inner.withTrimmedTop (rowHeight * pluckVoices + 12);
+        layoutKnobs (knobs.withWidth (juce::jmin (480, knobs.getWidth())), { &pluckCutoff, &pluckDecay, &pluckResonance, &pluckMix });
     }
 
     // chain: 16 positions per row, 8 rows, then the length
