@@ -25,6 +25,19 @@ enum class StepState : std::uint8_t
     Accent = 2
 };
 
+// Plain copy of everything a pattern holds, for the clipboard and the swap.
+struct PatternData
+{
+    std::array<std::uint8_t, numTracks * numSteps> cells {};
+    std::array<std::uint8_t, numFxRows * numSteps> fxCells {};
+    std::array<std::uint8_t, numSteps> bassNotes {};
+    std::array<bool, numSteps> bassAccents {};
+    std::array<std::uint8_t, numSteps * synthVoices> synthNotes {};
+    std::array<bool, numSteps> synthAccents {};
+    std::array<std::uint8_t, numSteps * pluckVoices> pluckNotes {};
+    std::array<bool, numSteps> pluckAccents {};
+};
+
 // Shared between the UI thread (writes) and the audio thread (reads): every cell is atomic.
 class Pattern
 {
@@ -104,6 +117,32 @@ public:
         return next;
     }
 
+    PatternData capture() const noexcept
+    {
+        PatternData d;
+        copyOut (cells, d.cells);
+        copyOut (fxCells, d.fxCells);
+        copyOut (bassNotes, d.bassNotes);
+        copyOut (bassAccents, d.bassAccents);
+        copyOut (synthNotes, d.synthNotes);
+        copyOut (synthAccents, d.synthAccents);
+        copyOut (pluckNotes, d.pluckNotes);
+        copyOut (pluckAccents, d.pluckAccents);
+        return d;
+    }
+
+    void apply (const PatternData& d) noexcept
+    {
+        copyIn (d.cells, cells);
+        copyIn (d.fxCells, fxCells);
+        copyIn (d.bassNotes, bassNotes);
+        copyIn (d.bassAccents, bassAccents);
+        copyIn (d.synthNotes, synthNotes);
+        copyIn (d.synthAccents, synthAccents);
+        copyIn (d.pluckNotes, pluckNotes);
+        copyIn (d.pluckAccents, pluckAccents);
+    }
+
     void clear() noexcept
     {
         for (auto& c : cells)
@@ -123,6 +162,19 @@ public:
     }
 
 private:
+    template <class Atomics, class Plain>
+    static void copyOut (const Atomics& from, Plain& to) noexcept
+    {
+        for (size_t i = 0; i < from.size(); ++i)
+            to[i] = from[i].load (std::memory_order_relaxed);
+    }
+    template <class Plain, class Atomics>
+    static void copyIn (const Plain& from, Atomics& to) noexcept
+    {
+        for (size_t i = 0; i < from.size(); ++i)
+            to[i].store (from[i], std::memory_order_relaxed);
+    }
+
     static constexpr int index (int track, int step) noexcept { return track * numSteps + step; }
 
     static size_t fxIndex (int row, int step) noexcept { return static_cast<size_t> (std::clamp (row, 0, numFxRows - 1) * numSteps + step); }
@@ -155,6 +207,19 @@ public:
     Pattern& pattern (int index) noexcept { return patterns[(size_t) std::clamp (index, 0, numPatterns - 1)]; }
     const Pattern& pattern (int index) const noexcept { return patterns[(size_t) std::clamp (index, 0, numPatterns - 1)]; }
 
+    // Pattern operations: each touches only the patterns it names. An index out of range is brought back into it.
+    PatternData copyPattern (int index) const noexcept { return pattern (index).capture(); }
+    void pastePattern (int index, const PatternData& data) noexcept { pattern (index).apply (data); }
+    void clearPattern (int index) noexcept { pattern (index).clear(); }
+    void swapPatterns (int a, int b) noexcept
+    {
+        if (std::clamp (a, 0, numPatterns - 1) == std::clamp (b, 0, numPatterns - 1))
+            return;
+        const auto first = pattern (a).capture();
+        pattern (a).apply (pattern (b).capture());
+        pattern (b).apply (first);
+    }
+
     void setChainLength (int length) noexcept { chainLength.store (std::clamp (length, 1, maxChainLength)); }
     int getChainLength() const noexcept { return chainLength.load(); }
     void setChainEntry (int position, int patternIndex) noexcept
@@ -163,15 +228,6 @@ public:
     }
     int getChainEntry (int position) const noexcept { return chain[(size_t) std::clamp (position, 0, maxChainLength - 1)].load(); }
 
-    // Position in the chain being played at the given absolute step.
-    int chainPositionAt (std::int64_t absoluteStep) const noexcept
-    {
-        return static_cast<int> ((absoluteStep / numSteps) % getChainLength());
-    }
-    const Pattern& patternAt (std::int64_t absoluteStep) const noexcept
-    {
-        return pattern (getChainEntry (chainPositionAt (absoluteStep)));
-    }
 
 private:
     std::array<Pattern, numPatterns> patterns;

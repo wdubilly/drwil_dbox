@@ -221,6 +221,33 @@
         "drumbox/**",
         ".drwil/ia-first.json"
       ]
+    },
+    {
+      "id": "dbx-022",
+      "name": "DBX-022 copy, paste, clear and swap of patterns",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-022$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-023",
+      "name": "DBX-023 chain length change applied at once",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-023$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-024",
+      "name": "DBX-024 piano roll writes the step data",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-024$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
     }
   ],
   "scopeReminder": "blocking",

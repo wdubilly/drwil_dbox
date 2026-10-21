@@ -21,6 +21,7 @@ void Sequencer::reset() noexcept
     nextStep = 0;
     lastStep = -1;
     lastChainPosition = -1;
+    songPosition = -1;
 }
 
 double Sequencer::stepPosition (std::int64_t absoluteStep) const noexcept
@@ -29,8 +30,8 @@ double Sequencer::stepPosition (std::int64_t absoluteStep) const noexcept
     return static_cast<double> (absoluteStep) + shift;
 }
 
-template <class PatternAt, class PositionAt>
-void Sequencer::run (PatternAt&& patternAt, PositionAt&& positionAt, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>* notes)
+template <class Locate>
+void Sequencer::run (Locate&& locate, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>* notes)
 {
     const double perStep = samplesPerStep();
     const double end = position + numSamples / perStep;
@@ -41,10 +42,11 @@ void Sequencer::run (PatternAt&& patternAt, PositionAt&& positionAt, int numSamp
         const double when = stepPosition (nextStep);
         const int offset = std::clamp (static_cast<int> (std::ceil ((when - position) * perStep)), 0, std::max (numSamples - 1, 0));
         const int step = static_cast<int> (nextStep % numSteps);
-        const Pattern& pattern = patternAt (nextStep);
+        const auto placed = locate (nextStep);
+        const Pattern& pattern = placed.pattern;
 
         lastStep = step;
-        lastChainPosition = positionAt (nextStep);
+        lastChainPosition = placed.chainPosition;
         for (int track = 0; track < numTracks; ++track)
         {
             const auto state = pattern.get (track, step);
@@ -74,18 +76,29 @@ void Sequencer::run (PatternAt&& patternAt, PositionAt&& positionAt, int numSamp
 
 void Sequencer::process (const Pattern& pattern, int numSamples, std::vector<Trigger>& out)
 {
-    run ([&pattern] (std::int64_t) -> const Pattern& { return pattern; }, [] (std::int64_t) { return 0; }, numSamples, out, nullptr);
+    run ([&pattern] (std::int64_t) { return Placed { pattern, 0 }; }, numSamples, out, nullptr);
 }
 
 void Sequencer::process (const Pattern& pattern, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>& notes)
 {
-    run ([&pattern] (std::int64_t) -> const Pattern& { return pattern; }, [] (std::int64_t) { return 0; }, numSamples, out, &notes);
+    run ([&pattern] (std::int64_t) { return Placed { pattern, 0 }; }, numSamples, out, &notes);
 }
 
+// The position is advanced one pattern at a time rather than computed from the step count, so a
+// new chain length applies at once: the music goes on if the position is still inside the chain,
+// otherwise it returns to the first position, keeping the beat.
 void Sequencer::process (const Song& song, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>& notes)
 {
-    run ([&song] (std::int64_t step) -> const Pattern& { return song.patternAt (step); },
-         [&song] (std::int64_t step) { return song.chainPositionAt (step); }, numSamples, out, &notes);
+    run ([this, &song] (std::int64_t step) {
+            if (songPosition < 0)
+                songPosition = 0;
+            else if (step % numSteps == 0)
+                ++songPosition;
+            if (songPosition >= song.getChainLength())
+                songPosition = 0;
+            return Placed { song.pattern (song.getChainEntry (songPosition)), songPosition };
+        },
+        numSamples, out, &notes);
 }
 
 } // namespace drumbox

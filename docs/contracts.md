@@ -409,6 +409,45 @@ contracts » section).
 **Manual** : the human tries the app and attests that saving, opening, exporting the WAV and exporting the stems are easy to find and to use, that the messages are clear, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
 **Origin** : drum-box-songs — « Saving, opening and exporting are available in the interface, easy to use »
 
+## DBX-022 — A pattern can be copied and pasted onto another, cleared or swapped, the others untouched
+**Rule** : The song offers, on its 16 patterns, copy (a snapshot of one pattern), paste (that snapshot written onto another pattern), clear (a pattern emptied) and swap (two patterns trading places). Each operation changes only the patterns it names, and a pattern copied or swapped plays exactly as the original did.
+**Scope** : the drum box engine (`drumbox/Source/Pattern.h`)
+**Source of truth** : `drumbox/Source/Pattern.h` (`Song::copyPattern`, `pastePattern`, `clearPattern`, `swapPatterns`)
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-022` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : building a song by variations means reusing a pattern; an operation that spills over another pattern silently destroys work
+**Check** : `dbx-022`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-editing — « A pattern can be copied and pasted onto another, cleared, or swapped with another, and the other patterns are untouched »
+
+## DBX-023 — A new chain length applies at once while playing
+**Rule** : When the chain length changes during playback, the new length applies at the next step: playback goes on from the current position if it is still inside the chain, otherwise it returns to the first position (keeping the beat). With a constant length the chain plays as `DBX-007` requires.
+**Scope** : the drum box engine (`drumbox/Source/Sequencer.cpp`)
+**Source of truth** : `drumbox/Source/Sequencer.cpp` (`Sequencer::process` for a song)
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-023` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a position computed from the step count jumps somewhere unexpected when the length changes; the musician must be able to shorten or extend the chain live
+**Check** : `dbx-023`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-editing — « When the chain length changes during playback, the new length applies at once »
+
+## DBX-024 — Notes entered in the piano roll give the same pattern data as the step-by-step entry
+**Rule** : The piano roll of the bass, the pad and the pluck writes the pattern's own note data (one note per step for the bass, up to four per step for the pad and the pluck, notes kept within the playable range, the step's accent kept): entering the same notes by the roll or step by step gives identical pattern data, a fifth note on a pad or pluck step is refused and changes nothing, and the step-by-step entry keeps working on the same data.
+**Scope** : the drum box engine (`drumbox/Source/PianoRoll.h`, `drumbox/Source/PianoRoll.cpp`)
+**Source of truth** : `drumbox/Source/PianoRoll.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-024` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a second storage for the roll would drift from the pattern the song file saves and the sequencer plays
+**Check** : `dbx-024`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-editing — « Notes entered in the piano roll give the same pattern data as the step-by-step entry, and the step-by-step entry still works »
+
+## DBX-025 — The pattern operations and the piano roll are easy to use and keep the 70's funk feel
+**Rule** : The standalone window offers COPY, PASTE, CLEAR (with a confirmation) and SWAP buttons next to the pattern bank, and a PIANO ROLL switch on the bass, pad and pluck views that shows a note grid (16 steps across, two octaves up, octave buttons, right-click for the accent) beside the step-by-step rows, while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge ease of use or taste
+**Reason** : editing tools are the product's face, a matter of taste that only the requester can accept
+**Manual** : the human tries the app and attests that copy, paste, clear, swap and the piano roll are easy to find and to use, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
+**Origin** : drum-box-editing — « The pattern operations and the piano roll are easy to use in the interface, with the 70's funk feel »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

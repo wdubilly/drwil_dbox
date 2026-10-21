@@ -1,6 +1,6 @@
 # Project: Drum box, pattern editing and piano roll
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: increments 1 to 4 built on 2026-10-22 — `DBX-022` to `DBX-024` proven by tests; `DBX-025` waits for the human attestation.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/pattern-editing.md`
@@ -65,6 +65,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. The songs workstream is closed (see the journal).
+- **Last state** (2026-10-22): the four increments are implemented on the workstream branch. Pattern copy, paste, clear and swap are in `Song`; the chain position is now tracked by the sequencer so a new length applies at once (back to the first position, keeping the beat, when the position falls outside); the piano roll logic is in `PianoRoll.h` and the roll view and the COPY, PASTE, CLEAR and SWAP buttons are in `MainComponent`. The standalone app builds on Linux; it was not run with a screen by the agent.
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [human] try the app and attest `DBX-025` (`drwil attest`); the agent then closes the workstream (journal entry, `node .githooks/close.mjs`).

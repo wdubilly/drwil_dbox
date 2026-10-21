@@ -220,6 +220,158 @@ void NoteButton::paintButton (juce::Graphics& g, bool highlighted, bool down)
     }
 }
 
+PianoRollView::PianoRollView (Song& songToEdit, const int& editedPattern, RollTrack trackToEdit)
+    : song (songToEdit), editing (editedPattern), track (trackToEdit),
+      lowest (trackToEdit == RollTrack::Bass ? 36 : trackToEdit == RollTrack::Pad ? 48 : 60)
+{
+    setTitle (track == RollTrack::Bass ? "BASS piano roll" : track == RollTrack::Pad ? "PAD piano roll" : "PLUCK piano roll");
+    lower.setTitle ("Piano roll one octave down");
+    higher.setTitle ("Piano roll one octave up");
+    lower.onClick = [this] { shiftOctave (-1); };
+    higher.onClick = [this] { shiftOctave (1); };
+    addAndMakeVisible (lower);
+    addAndMakeVisible (higher);
+    setMouseCursor (juce::MouseCursor::PointingHandCursor);
+}
+
+void PianoRollView::setCurrentStep (int step)
+{
+    if (current != step)
+    {
+        current = step;
+        repaint();
+    }
+}
+
+juce::Rectangle<int> PianoRollView::grid() const
+{
+    return getLocalBounds().withTrimmedTop (34).withTrimmedLeft (keyWidth);
+}
+
+void PianoRollView::shiftOctave (int octaves)
+{
+    lowest = juce::jlimit (lowestNote, highestNote - (rows - 1), lowest + 12 * octaves);
+    repaint();
+}
+
+bool PianoRollView::accentOf (int step) const
+{
+    const auto& p = song.pattern (editing);
+    return track == RollTrack::Bass ? p.getBassAccent (step) : track == RollTrack::Pad ? p.getSynthAccent (step) : p.getPluckAccent (step);
+}
+
+void PianoRollView::toggleAccent (int step)
+{
+    auto& p = song.pattern (editing);
+    if (track == RollTrack::Bass)
+        p.setBass (step, p.getBassNote (step), ! p.getBassAccent (step));
+    else if (track == RollTrack::Pad)
+        p.setSynthAccent (step, ! p.getSynthAccent (step));
+    else
+        p.setPluckAccent (step, ! p.getPluckAccent (step));
+}
+
+void PianoRollView::resized()
+{
+    auto top = getLocalBounds().removeFromTop (30);
+    higher.setBounds (top.removeFromRight (90).reduced (2, 2));
+    lower.setBounds (top.removeFromRight (90).reduced (2, 2));
+}
+
+void PianoRollView::mouseDown (const juce::MouseEvent& e)
+{
+    const auto area = grid();
+    if (! area.contains (e.getPosition()))
+        return;
+    const int step = (e.x - area.getX()) * numSteps / area.getWidth();
+    if (e.mods.isRightButtonDown())
+    {
+        toggleAccent (step);
+        repaint();
+        return;
+    }
+    const int row = (e.y - area.getY()) * rows / area.getHeight();
+    pianoRoll::toggleNote (song.pattern (editing), track, step, lowest + rows - 1 - row);
+    repaint();
+}
+
+void PianoRollView::mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails& wheel)
+{
+    if (wheel.deltaY != 0.0f)
+        shiftOctave (wheel.deltaY > 0.0f ? 1 : -1);
+}
+
+void PianoRollView::paint (juce::Graphics& g)
+{
+    const auto area = grid();
+    const float cellW = (float) area.getWidth() / numSteps;
+    const float cellH = (float) area.getHeight() / rows;
+    const auto& pattern = song.pattern (editing);
+    const juce::Colour noteColour = track == RollTrack::Bass ? palette::orange
+                                  : track == RollTrack::Pad  ? palette::avocado.brighter (0.2f) : palette::teal;
+
+    g.setFont (juce::Font (juce::FontOptions (juce::jmin (13.0f, cellH * 0.8f), juce::Font::bold)));
+    for (int r = 0; r < rows; ++r)
+    {
+        const int note = lowest + rows - 1 - r;
+        const float y = (float) area.getY() + (float) r * cellH;
+        const bool black = pianoRoll::isBlackKey (note);
+        g.setColour (black ? palette::darkWood : palette::wood.darker (0.1f));
+        g.fillRect ((float) area.getX(), y, (float) area.getWidth(), cellH);
+        g.setColour (black ? palette::brownInk : palette::cream);
+        g.fillRect (0.0f, y, (float) keyWidth - 4.0f, cellH - 1.0f);
+        g.setColour (black ? palette::cream : palette::brownInk);
+        g.drawText (NoteButton::noteName (note), 4, (int) y, keyWidth - 10, (int) cellH, juce::Justification::centredLeft);
+        g.setColour (note % 12 == 0 ? palette::cream.withAlpha (0.5f) : palette::brownInk.withAlpha (0.4f));
+        g.drawHorizontalLine ((int) y, (float) area.getX(), (float) area.getRight());
+    }
+    for (int s = 0; s <= numSteps; ++s)
+    {
+        g.setColour (s % 4 == 0 ? palette::cream.withAlpha (0.5f) : palette::brownInk.withAlpha (0.5f));
+        g.drawVerticalLine (area.getX() + (int) ((float) s * cellW), (float) area.getY(), (float) area.getBottom());
+    }
+
+    const auto arrow = [] (float x, float tip, bool up)
+    {
+        juce::Path p;
+        const float base = up ? tip + 7.0f : tip - 7.0f;
+        p.addTriangle (x - 5.0f, base, x + 5.0f, base, x, tip);
+        return p;
+    };
+    for (int s = 0; s < numSteps; ++s)
+    {
+        const bool accent = accentOf (s);
+        bool above = false, below = false;
+        for (const int note : pianoRoll::notesAt (pattern, track, s))
+        {
+            above = above || note >= lowest + rows;
+            below = below || note < lowest;
+            if (note < lowest || note >= lowest + rows)
+                continue;
+            const auto cell = juce::Rectangle<float> ((float) area.getX() + (float) s * cellW, (float) area.getY() + (float) (lowest + rows - 1 - note) * cellH, cellW, cellH).reduced (2.0f);
+            g.setColour (accent ? palette::mustard : noteColour);
+            g.fillRoundedRectangle (cell, 4.0f);
+            g.setColour (palette::brownInk);
+            g.drawRoundedRectangle (cell, 4.0f, 2.0f);
+        }
+        // a note outside the shown octaves is marked at the edge so it is not lost
+        g.setColour (palette::cream);
+        const float x = (float) area.getX() + ((float) s + 0.5f) * cellW;
+        if (above)
+            g.fillPath (arrow (x, (float) area.getY() + 1.0f, true));
+        if (below)
+            g.fillPath (arrow (x, (float) area.getBottom() - 1.0f, false));
+        if (accent)
+            g.fillRect (x - 3.0f, (float) area.getY() - 6.0f, 6.0f, 4.0f);
+    }
+
+    if (current >= 0)
+    {
+        g.setColour (palette::cream);
+        g.drawRect (juce::Rectangle<float> ((float) area.getX() + (float) current * cellW, (float) area.getY(), cellW, (float) area.getHeight()), 3.0f);
+    }
+}
+
 ChainCell::ChainCell (Song& songToEdit, const int& editedPattern, int positionIndex)
     : juce::Button ({}), song (songToEdit), editing (editedPattern), position (positionIndex)
 {
@@ -489,6 +641,34 @@ MainComponent::MainComponent()
         addAndMakeVisible (b);
     }
     patternButtons[0].setToggleState (true, juce::dontSendNotification);
+
+    copyButton.setTitle ("Copy the edited pattern");
+    copyButton.onClick = [this] { copyPattern(); };
+    pasteButton.setTitle ("Paste the copied pattern onto the edited pattern");
+    pasteButton.setEnabled (false);
+    pasteButton.onClick = [this] { pastePattern(); };
+    clearButton.setTitle ("Clear the edited pattern");
+    clearButton.onClick = [this] { clearPattern(); };
+    swapButton.setTitle ("Swap the edited pattern with the pattern you click next");
+    swapButton.setClickingTogglesState (true);
+    swapButton.onClick = [this] { armSwap(); };
+    for (auto* b : { &copyButton, &pasteButton, &clearButton, &swapButton })
+        addAndMakeVisible (*b);
+
+    const RollTrack rollTracks[] = { RollTrack::Bass, RollTrack::Pad, RollTrack::Pluck };
+    for (size_t r = 0; r < rolls.size(); ++r)
+    {
+        rolls[r] = std::make_unique<PianoRollView> (engine.getSong(), editing, rollTracks[r]);
+        addChildComponent (*rolls[r]);
+    }
+    rollToggle.setTitle ("Switch between the step-by-step rows and the piano roll");
+    rollToggle.setClickingTogglesState (true);
+    rollToggle.onClick = [this]
+    {
+        rollMode = rollToggle.getToggleState();
+        showView (view);
+    };
+    addChildComponent (rollToggle);
 
     for (int t = 0; t < numTracks; ++t)
     {
@@ -831,20 +1011,24 @@ void MainComponent::showView (View newView)
         for (auto& c : components)
             c->setVisible (visible);
     };
+    const bool roll = rollShown();
     show (steps, view == Drums);
     for (auto& l : trackLabels)
         l.setVisible (view == Drums);
     show (fxSteps, view == Fx);
     for (auto& l : fxLabels)
         l.setVisible (view == Fx);
-    show (bassSteps, view == Bass);
-    bassLabel.setVisible (view == Bass);
-    show (synthSteps, view == Pad);
+    show (bassSteps, view == Bass && ! roll);
+    bassLabel.setVisible (view == Bass && ! roll);
+    show (synthSteps, view == Pad && ! roll);
     for (auto& l : synthSlotLabels)
-        l.setVisible (view == Pad);
-    show (pluckSteps, view == Pluck);
+        l.setVisible (view == Pad && ! roll);
+    show (pluckSteps, view == Pluck && ! roll);
     for (auto& l : pluckSlotLabels)
-        l.setVisible (view == Pluck);
+        l.setVisible (view == Pluck && ! roll);
+    for (size_t r = 0; r < rolls.size(); ++r)
+        rolls[r]->setVisible (roll && (size_t) (view - Bass) == r);
+    rollToggle.setVisible (view == Bass || view == Pad || view == Pluck);
     show (chainCells, view == Chain);
     show (trackStrips, view == Tracks);
     for (int e = 0; e < numEffects; ++e)
@@ -890,7 +1074,9 @@ void MainComponent::showView (View newView)
         "M: mute   S: solo   click a track to edit it   SEND: share sent to the effects   double-click a slider to reset it",
         "switch an effect on, then turn its knobs   the sends of the tracks (TRACKS view) feed the chain"
     };
-    legendLabel.setText (legends[view], juce::dontSendNotification);
+    legendLabel.setText (roll ? "PIANO ROLL   click a cell: note on / off   right-click: accent   OCT or wheel: change octave"
+                              : legends[view],
+                         juce::dontSendNotification);
     resized();
     repaint();
 }
@@ -1160,8 +1346,54 @@ void MainComponent::openTrackEditor (int mixerTrack)
 
 void MainComponent::selectPattern (int index)
 {
+    if (swapArmed)
+    {
+        engine.getSong().swapPatterns (editing, index);
+        swapArmed = false;
+        swapButton.setToggleState (false, juce::dontSendNotification);
+        patternButtons[(size_t) editing].setToggleState (true, juce::dontSendNotification);
+        repaint();
+        return;
+    }
     editing = index;
     repaint();
+}
+
+void MainComponent::copyPattern()
+{
+    clipboard = engine.getSong().copyPattern (editing);
+    pasteButton.setEnabled (true);
+}
+
+void MainComponent::pastePattern()
+{
+    if (! clipboard)
+        return;
+    engine.getSong().pastePattern (editing, *clipboard);
+    repaint();
+}
+
+void MainComponent::clearPattern()
+{
+    // no undo: ask first
+    juce::Component::SafePointer<MainComponent> self (this);
+    const int target = editing;
+    juce::AlertWindow::showOkCancelBox (juce::MessageBoxIconType::QuestionIcon, "Clear pattern",
+                                        "Clear pattern " + juce::String (target + 1) + "? Its drums, bass, pad, pluck and FX are emptied.",
+                                        "Clear", "Cancel", this,
+                                        juce::ModalCallbackFunction::create ([self, target] (int result)
+                                        {
+                                            if (self != nullptr && result == 1)
+                                            {
+                                                self->engine.getSong().clearPattern (target);
+                                                self->repaint();
+                                            }
+                                        }));
+}
+
+void MainComponent::armSwap()
+{
+    swapArmed = swapButton.getToggleState();
 }
 
 void MainComponent::updateTransportButton()
@@ -1209,6 +1441,8 @@ void MainComponent::timerCallback()
         mark (shownStep, false);
         mark (current, true);
         shownStep = current;
+        for (auto& r : rolls)
+            r->setCurrentStep (current);
     }
 
     const int position = engine.getCurrentChainPosition();
@@ -1271,9 +1505,12 @@ void MainComponent::resized()
 
     auto bank = area.removeFromTop (38);
     patternLabel.setBounds (bank.removeFromLeft (90));
-    const int bankWidth = juce::jmin (bank.getWidth() - 150, 48 * numPatterns);
+    const int bankWidth = juce::jmin (bank.getWidth() - 290, 40 * numPatterns);
     for (auto& b : patternButtons)
         b.setBounds (bank.removeFromLeft (bankWidth / numPatterns).reduced (2, 2));
+    bank.removeFromLeft (12);
+    for (auto* b : { &copyButton, &pasteButton, &clearButton, &swapButton })
+        b->setBounds (bank.removeFromLeft (juce::jmin (64, bank.getWidth() / 4)).reduced (2, 2));
     area.removeFromTop (8);
 
     auto side = area.removeFromRight (134);
@@ -1285,6 +1522,7 @@ void MainComponent::resized()
         inner.removeFromBottom (6);
         presetLabel.setBounds (presetBar.removeFromLeft (90));
         presetSave.setBounds (presetBar.removeFromRight (90).reduced (2, 4));
+        rollToggle.setBounds (presetBar.removeFromRight (130).reduced (2, 4));
         presetBox.setBounds (presetBar.removeFromLeft (juce::jmin (320, presetBar.getWidth())).reduced (2, 4));
     }
 
@@ -1370,6 +1608,23 @@ void MainComponent::resized()
         }
         auto knobs = inner.withTrimmedTop (rowHeight * pluckVoices + 12);
         layoutKnobs (knobs.withWidth (juce::jmin (480, knobs.getWidth())), { &pluckCutoff, &pluckDecay, &pluckResonance, &pluckMix });
+    }
+
+    // piano roll: replaces the step rows, the knobs move to the bottom
+    if (rollShown())
+    {
+        auto roll = inner;
+        auto knobs = roll.removeFromBottom (170);
+        roll.removeFromBottom (8);
+        for (auto& r : rolls)
+            r->setBounds (roll);
+        if (view == Bass)
+            layoutKnobs (knobs.withWidth (juce::jmin (300, knobs.getWidth())), { &bassCutoff, &bassDecay });
+        else if (view == Pad)
+            layoutKnobs (knobs, { &osc2Semitones, &osc2Detune, &osc2Mix, &synthCutoff, &synthResonance, &synthAttack,
+                                  &synthDecay, &synthSustain, &synthRelease, &lfoRate, &lfoDepth });
+        else
+            layoutKnobs (knobs.withWidth (juce::jmin (480, knobs.getWidth())), { &pluckCutoff, &pluckDecay, &pluckResonance, &pluckMix });
     }
 
     // tracks: twelve strips stacked

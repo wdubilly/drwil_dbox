@@ -1,6 +1,7 @@
 #pragma once
 
 #include "DrumEngine.h"
+#include "PianoRoll.h"
 #include "Presets.h"
 #include "SongExport.h"
 #include "SongFile.h"
@@ -11,6 +12,7 @@
 #include <array>
 #include <functional>
 #include <memory>
+#include <optional>
 #include <vector>
 
 // The pattern being edited is shared by every editor: they read it at paint time.
@@ -68,6 +70,35 @@ private:
     int dragStartNote = 0, dragStartY = 0;
     bool dragged = false;
     bool current = false;
+};
+
+// Piano roll of the bass, the pad or the pluck: the 16 steps across, the pitches up. It writes the same
+// pattern data as the step-by-step rows. Click: note on / off. Right-click: accent of the step.
+class PianoRollView : public juce::Component
+{
+public:
+    PianoRollView (drumbox::Song& songToEdit, const int& editedPattern, drumbox::RollTrack trackToEdit);
+
+    void setCurrentStep (int step);
+    void paint (juce::Graphics&) override;
+    void resized() override;
+    void mouseDown (const juce::MouseEvent&) override;
+    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
+
+private:
+    static constexpr int rows = 25;
+    static constexpr int keyWidth = 64;
+    juce::Rectangle<int> grid() const;
+    void shiftOctave (int octaves);
+    bool accentOf (int step) const;
+    void toggleAccent (int step);
+
+    drumbox::Song& song;
+    const int& editing;
+    drumbox::RollTrack track;
+    int lowest;
+    int current = -1;
+    juce::TextButton lower { "OCT -" }, higher { "OCT +" };
 };
 
 // One position of the chain: shows the pattern played there, click to assign the edited pattern.
@@ -147,6 +178,11 @@ private:
     void updateTransportButton();
     void showView (View view);
     void selectPattern (int index);
+    void copyPattern();
+    void pastePattern();
+    void clearPattern();
+    void armSwap();
+    bool rollShown() const { return rollMode && (view == Bass || view == Pad || view == Pluck); }
     void openTrackEditor (int mixerTrack);
     void addKnob (Knob& knob, const juce::String& text, double min, double max, double step, double initial,
                   const juce::String& suffix, double skewMidPoint = 0.0);
@@ -178,6 +214,12 @@ private:
     juce::TextButton playButton { "PLAY" };
     std::array<juce::TextButton, numViews> viewButtons;
     std::array<juce::TextButton, drumbox::numPatterns> patternButtons;
+    juce::TextButton copyButton { "COPY" }, pasteButton { "PASTE" }, clearButton { "CLEAR" }, swapButton { "SWAP" };
+    std::optional<drumbox::PatternData> clipboard;
+    bool swapArmed = false;
+    std::array<std::unique_ptr<PianoRollView>, 3> rolls; // bass, pad, pluck
+    juce::TextButton rollToggle { "PIANO ROLL" };
+    bool rollMode = false;
     Knob tempo, swing;
     juce::Label titleLabel, legendLabel, patternLabel, chainLengthLabel;
     juce::Slider chainLengthSlider;
