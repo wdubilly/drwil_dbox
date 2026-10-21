@@ -1,6 +1,6 @@
 # Project: Drum box, save songs and export to WAV
 
-**Status**: scoped on 2026-10-21 — not started.
+**Status**: increments 1 to 3 built on 2026-10-22 — `DBX-018` to `DBX-020` pass, the app builds; `DBX-021` waits for the human's attestation.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/song-save-export.md`
@@ -63,6 +63,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): scoped, not started. The effects workstream is closed (see the journal).
+- **Last state** (2026-10-22): the song file (`DBX-018`), the WAV export (`DBX-019`) and the stems (`DBX-020`) are in the engine with their tests, and the interface has OPEN SONG, SAVE SONG, EXPORT WAV and EXPORT STEMS (`DBX-021`). The song file also holds the mixer (mute, solo, volume, tune, detune, send) and the settings of the master-chain effects, which the previous workstream had left out: this is covered by `DBX-018`. The presets are kept as the sound they gave (knobs and mixer values), not as references. Limits: the engine is mono, so the stereo files carry the same signal on both channels; a stem is the track alone through the master chain, so stems add up to the mix only when no effect colours the sound; the tail stops after one second of silence or 60 seconds; the open song file name is shown but nothing warns about unsaved changes.
 - **Uncommitted work**: none once committed.
-- **Next step**: [human] start the workstream (`/drwil-start`); then the agent runs increment 1.
+- **Next step**: [human] try the app and attest `DBX-021` (`drwil attest`); then the agent closes the workstream.

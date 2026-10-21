@@ -2,6 +2,8 @@
 
 #include "DrumEngine.h"
 #include "Presets.h"
+#include "SongExport.h"
+#include "SongFile.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -155,6 +157,16 @@ private:
     void applySelectedPreset();
     void askPresetName();
     void saveUserPreset (const juce::String& name);
+    void openSong();
+    void saveSong();
+    void exportMix();
+    void exportStems();
+    void loadSongFrom (const juce::File& file);
+    void saveSongTo (const juce::File& file);
+    void runExport (const juce::String& title, const std::function<bool()>& work, const juce::String& done);
+    void showSongName();
+    juce::File songsFolder() const;
+    juce::String songBaseName() const;
     bool hasPresets() const { return view <= Fx; }
     drumbox::PresetKind presetKind() const { return (drumbox::PresetKind) (int) view; }
 
@@ -198,6 +210,14 @@ private:
     juce::TextButton presetSave { "SAVE" };
     drumbox::FolderPresetStore presetStore;
     int userPresetFirstId = 1000;
+
+    // song files: open, save, export; songs live in a default folder and the user picks the file
+    juce::TextButton openButton { "OPEN SONG" }, saveButton { "SAVE SONG" }, exportButton { "EXPORT WAV" },
+                     stemsButton { "EXPORT STEMS" };
+    juce::Label songLabel;
+    juce::File songFile;
+    std::unique_ptr<juce::FileChooser> chooser;
+    std::unique_ptr<juce::Thread> exportThread;
 
     juce::Rectangle<int> panel;
     juce::Rectangle<int> presetBar;
