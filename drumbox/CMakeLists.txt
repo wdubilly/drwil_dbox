@@ -13,6 +13,7 @@ include(CTest)
 
 add_library(drumbox_engine STATIC
     Source/DrumEngine.cpp
+    Source/Instruments.cpp
     Source/Sequencer.cpp
     Source/Voices.cpp)
 target_include_directories(drumbox_engine PUBLIC Source)
@@ -28,7 +29,7 @@ if(BUILD_TESTING)
     if(NOT MSVC)
         target_compile_options(drumbox_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
-    foreach(id DBX-001 DBX-002 DBX-003 DBX-004 DBX-005 DBX-007)
+    foreach(id DBX-001 DBX-002 DBX-003 DBX-004 DBX-005 DBX-007 DBX-008 DBX-009)
         add_test(NAME ${id} COMMAND drumbox_tests ${id})
     endforeach()
 endif()

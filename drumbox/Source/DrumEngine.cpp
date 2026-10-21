@@ -15,6 +15,8 @@ void DrumEngine::prepare (double sampleRate)
 {
     sequencer.prepare (sampleRate);
     voices.prepare (sampleRate);
+    bass.prepare (sampleRate);
+    synth.prepare (sampleRate);
     sequencer.reset();
     wasPlaying = false;
     currentStep.store (-1);
@@ -45,8 +47,9 @@ void DrumEngine::render (float* out, int numSamples)
         currentChainPosition.store (sequencer.getLastChainPosition());
     }
 
-    // triggers are ordered by offset; voices keep ringing after a stop
+    // triggers and notes are ordered by offset; voices keep ringing after a stop
     size_t next = 0;
+    size_t nextNote = 0;
     for (int i = 0; i < numSamples; ++i)
     {
         while (next < triggers.size() && triggers[next].sampleOffset <= i)
@@ -54,7 +57,18 @@ void DrumEngine::render (float* out, int numSamples)
             voices.trigger (triggers[next].track, triggers[next].accent ? accentGain : normalGain);
             ++next;
         }
-        out[i] = std::clamp (voices.next() * 0.6f, -1.0f, 1.0f);
+        while (nextNote < notes.size() && notes[nextNote].sampleOffset <= i)
+        {
+            const auto& n = notes[nextNote];
+            const float gain = n.accent ? accentGain : normalGain;
+            if (n.instrument == Instrument::Bass)
+                bass.noteOn (n.note, gain, n.gateSamples);
+            else
+                synth.noteOn (n.note, gain, n.gateSamples);
+            ++nextNote;
+        }
+        const float mix = voices.next() * 0.6f + bass.next (bassParams) * bassLevel + synth.next (synthParams) * synthLevel;
+        out[i] = std::clamp (mix, -1.0f, 1.0f);
     }
 }
 } // namespace drumbox

@@ -205,6 +205,26 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-song — « Up to 16 patterns, each holding the drums, the bass line and the synth, can be chained (up to 128 positions) and play one after the other in time, then loop »
 
+## DBX-008 — The bass is a monophonic voice playing one note per step at the step's pitch
+**Rule** : Each step of a pattern can carry one bass note (pitch 24–96, MIDI numbering) and an accent flag; the bass is a single synthesised voice, so a new note takes over the one still sounding; each note plays at the pitch set on its step (within 3%), an empty step is silent, an accented note is at least 1.3 times the peak of a normal one, and the sound is finite, bounded and ends.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Instruments.cpp`, `drumbox/Source/Pattern.h`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-008` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a bass line is a melody of single notes; two bass notes at once would turn it into mud
+**Check** : `dbx-008`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « The bass line is a monophonic synthesised voice playing one note per step, at the pitch set on that step »
+
+## DBX-009 — The synth has four voices, two oscillators, a filter, an envelope and an LFO
+**Rule** : Each step of a pattern can carry up to four synth notes (and an accent flag) that play together; the synth has four voices (a fifth note takes over the oldest), each with two oscillators (the second tunable in semitones and cents), a low-pass filter, an attack-decay-sustain-release envelope, and one LFO that sweeps the filter cutoff (zero depth leaves the sound still); an empty step is silent, an accent is at least 1.3 times the peak of a normal step, and the sound is finite, bounded and ends.
+**Scope** : the drum box engine (`drumbox/Source/`)
+**Source of truth** : `drumbox/Source/Instruments.cpp`, `drumbox/Source/Pattern.h`
+**Proof** : test named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-009` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : chords and pads are what a synth adds next to the bass and the drums; its controls must each audibly do their job
+**Check** : `dbx-009`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-song — « The synth is a four-voice polyphonic voice (two oscillators, filter, envelope, LFO) playing the notes set on its steps »
+
 ## Out of registry (these are not contracts)
 
 | Rule | Nature | Where it lives |

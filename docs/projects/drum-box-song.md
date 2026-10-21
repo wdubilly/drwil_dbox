@@ -1,6 +1,6 @@
 # Project: Drum box, bass line, synth and pattern chain
 
-**Status**: 2026-10-21 — increment 1 (pattern chain) done, `DBX-007` tests pass; increments 2 to 4 to do.
+**Status**: 2026-10-21 — increments 1 to 3 (chain, bass, synth) done, `DBX-007` to `DBX-009` tests pass; increment 4 (interface) to do.
 **Risk**: HIGH
 **Maturity**: ready
 **Intent**: `docs/intentions/bass-synth-song.md`
@@ -67,6 +67,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-21): increment 1 done — `Song` (16 patterns, chain of up to 128 positions) in `Pattern.h`, chain playback in `Sequencer.*` and `DrumEngine.*`, `DBX-007` contract, check and tests. `Pattern` already stores bass notes and synth notes (not played yet).
+- **Last state** (2026-10-21): increments 1 to 3 done in the engine — `Song` chain (`Pattern.h`, `Sequencer.*`), `BassVoice` and `PolySynth` (`Instruments.*`) fed by `NoteEvent`s through `DrumEngine`; contracts `DBX-007` to `DBX-009`, their checks and tests. The UI (`MainComponent.*`) still shows only the drum grid of pattern 0.
 - **Uncommitted work**: none once committed.
-- **Next step**: [AI] increment 2 — bass voice (`DBX-008`).
+- **Next step**: [AI] increment 4 — bass and synth step editors, pattern bank and chain editor, funk styling; then the human tries the app and attests `DBX-010`.
