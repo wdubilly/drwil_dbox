@@ -26,7 +26,6 @@ otherwise.
 ## Projects
 
 - [ ] [decision] [P1] Drum box, pattern editing and piano roll: `docs/projects/drum-box-editing.md`
-- [ ] [decision] [P1] Drum box, save songs and export to WAV: `docs/projects/drum-box-songs.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines

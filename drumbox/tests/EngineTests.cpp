@@ -3,11 +3,14 @@
 // ID of the contract it protects).
 #include "../Source/DrumEngine.h"
 #include "../Source/Presets.h"
+#include "../Source/SongExport.h"
+#include "../Source/SongFile.h"
 
 #include <algorithm>
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
 #include <string>
@@ -1838,6 +1841,421 @@ TEST ("DBX-016 bad names, missing files and foreign or damaged text are refused 
     CHECK (bank.loadUser (store, PresetKind::Bass, "Wild"));
     CHECK (e.getBassParams().cutoff.load() == 3000.0f);
     CHECK (e.getMixer().getVolume (mixerBass) == 0.0f);
+})
+
+// ---- song file and export ----
+
+// A song that uses everything the file must keep.
+void fillRichSong (DrumEngine& e)
+{
+    e.setTempo (97.25);
+    e.setSwing (33.0);
+    Song& song = e.getSong();
+    for (int p = 0; p < numPatterns; ++p)
+    {
+        Pattern& pat = song.pattern (p);
+        for (int t = 0; t < numTracks; ++t)
+            for (int s = 0; s < numSteps; ++s)
+                pat.set (t, s, static_cast<StepState> ((p + t * 3 + s * 5) % 3));
+        for (int r = 0; r < numFxRows; ++r)
+            for (int s = 0; s < numSteps; ++s)
+                pat.setFx (r, s, static_cast<StepState> ((p + r + s) % 3));
+        for (int s = 0; s < numSteps; ++s)
+        {
+            pat.setBass (s, (s + p) % 3 == 0 ? noNote : lowestNote + (s * 7 + p) % 40, (s + p) % 4 == 0);
+            pat.setSynthAccent (s, (s + p) % 5 == 0);
+            pat.setPluckAccent (s, (s + p) % 6 == 0);
+            for (int v = 0; v < synthVoices; ++v)
+                pat.setSynthNote (s, v, (s + v + p) % 4 == 0 ? noNote : 40 + (s * 3 + v * 4 + p) % 50);
+            for (int v = 0; v < pluckVoices; ++v)
+                pat.setPluckNote (s, v, (s + v) % 3 == 0 ? noNote : highestNote - (s + v * 5 + p) % 60);
+        }
+    }
+    song.setChainLength (7);
+    for (int i = 0; i < maxChainLength; ++i)
+        song.setChainEntry (i, (i * 5 + 3) % numPatterns);
+
+    Mixer& m = e.getMixer();
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        m.setVolume (t, 0.1f + 0.1f * static_cast<float> (t));
+        m.setTune (t, static_cast<float> (t) - 5.5f);
+        m.setDetune (t, 7.3f * static_cast<float> (t) - 40.1f);
+        m.setSend (t, 0.0731f * static_cast<float> (t));
+        m.setMute (t, t % 4 == 1);
+        m.setSolo (t, t % 5 == 2);
+    }
+    e.getBassParams().cutoff.store (912.345f);
+    e.getBassParams().decay.store (0.333f);
+    e.getSynthParams().osc2Semitones.store (7.0f);
+    e.getSynthParams().cutoff.store (3141.5f);
+    e.getSynthParams().lfoDepth.store (0.41f);
+    e.getPluckParams().resonance.store (0.77f);
+    e.getPluckParams().osc2Mix.store (0.123f);
+    for (int fx = 0; fx < numEffects; ++fx)
+    {
+        auto settings = e.getEffects().settings (fx);
+        for (size_t i = 0; i < settings.size(); ++i)
+        {
+            const float span = settings[i].max - settings[i].min;
+            settings[i].value->store (i == 0 ? static_cast<float> (fx % 2) : settings[i].min + span * (0.15f + 0.1f * static_cast<float> ((i + static_cast<size_t> (fx)) % 6)));
+        }
+    }
+}
+
+std::string withNumber (std::string text, const std::string& key, const std::string& value)
+{
+    const auto at = text.find ("\"" + key + "\":");
+    const auto from = at + key.size() + 3;
+    const auto to = text.find_first_of (",}\n", from);
+    return text.replace (from, to - from, value);
+}
+
+std::string readFile (const std::string& path)
+{
+    std::ifstream in (path, std::ios::binary);
+    return { std::istreambuf_iterator<char> (in), std::istreambuf_iterator<char>() };
+}
+
+TEST ("DBX-018 a saved song opens again identical, with mixer and effects", {
+    DrumEngine original;
+    fillRichSong (original);
+    const std::string text = serializeSong (original);
+
+    DrumEngine back;
+    CHECK (parseSong (text, back));
+    CHECK (serializeSong (back) == text);
+    CHECK (back.getTempo() == 97.25 && back.getSwing() == 33.0);
+    CHECK (back.getSong().getChainLength() == 7);
+    for (int i = 0; i < maxChainLength; ++i)
+        CHECK (back.getSong().getChainEntry (i) == original.getSong().getChainEntry (i));
+    for (int p = 0; p < numPatterns; ++p)
+        for (int s = 0; s < numSteps; ++s)
+        {
+            const Pattern& a = original.getSong().pattern (p);
+            const Pattern& b = back.getSong().pattern (p);
+            CHECK (a.getBassNote (s) == b.getBassNote (s) && a.getBassAccent (s) == b.getBassAccent (s));
+            CHECK (a.getSynthAccent (s) == b.getSynthAccent (s) && a.getPluckAccent (s) == b.getPluckAccent (s));
+            for (int v = 0; v < synthVoices; ++v)
+                CHECK (a.getSynthNote (s, v) == b.getSynthNote (s, v));
+            for (int v = 0; v < pluckVoices; ++v)
+                CHECK (a.getPluckNote (s, v) == b.getPluckNote (s, v));
+            for (int t = 0; t < numTracks; ++t)
+                CHECK (a.get (t, s) == b.get (t, s));
+            for (int r = 0; r < numFxRows; ++r)
+                CHECK (a.getFx (r, s) == b.getFx (r, s));
+        }
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        const Mixer& a = original.getMixer();
+        const Mixer& b = back.getMixer();
+        CHECK (a.isMuted (t) == b.isMuted (t) && a.isSolo (t) == b.isSolo (t));
+        CHECK (a.getVolume (t) == b.getVolume (t) && a.getTune (t) == b.getTune (t));
+        CHECK (a.getDetune (t) == b.getDetune (t) && a.getSend (t) == b.getSend (t));
+    }
+    CHECK (back.getBassParams().cutoff.load() == 912.345f && back.getSynthParams().cutoff.load() == 3141.5f);
+    CHECK (back.getPluckParams().osc2Mix.load() == 0.123f);
+    for (int fx = 0; fx < numEffects; ++fx)
+    {
+        auto a = original.getEffects().settings (fx);
+        auto b = back.getEffects().settings (fx);
+        for (size_t i = 0; i < a.size(); ++i)
+            CHECK (a[i].value->load() == b[i].value->load());
+    }
+
+    original.setPlaying (true);
+    back.setPlaying (true);
+    CHECK (sameWave (renderEngine (original, 44100), renderEngine (back, 44100)));
+})
+
+TEST ("DBX-018 a song file is a .dbox JSON file, written whole and read back", {
+    const std::string folder = "dbx018_songs";
+    std::filesystem::remove_all (folder);
+    std::filesystem::create_directories (folder);
+    DrumEngine original;
+    fillRichSong (original);
+
+    CHECK (! saveSongFile (original, folder + "/song.json"));
+    CHECK (! saveSongFile (original, folder + "/missing/song.dbox"));
+    CHECK (saveSongFile (original, folder + "/song.dbox"));
+    CHECK (saveSongFile (original, folder + "/song.dbox")); // saving again replaces it
+    int files = 0;
+    for ([[maybe_unused]] const auto& entry : std::filesystem::directory_iterator (folder))
+        ++files;
+    CHECK (files == 1);
+    const std::string text = readFile (folder + "/song.dbox");
+    CHECK (text.rfind ("{", 0) == 0 && text.find ("\"drumbox-song\"") != std::string::npos);
+
+    DrumEngine back;
+    CHECK (loadSongFile (back, folder + "/song.dbox"));
+    CHECK (serializeSong (back) == serializeSong (original));
+    CHECK (! loadSongFile (back, folder + "/nothing.dbox"));
+    std::filesystem::copy_file (folder + "/song.dbox", folder + "/song.txt");
+    CHECK (! loadSongFile (back, folder + "/song.txt"));
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-018 a damaged or foreign file is refused and changes nothing", {
+    DrumEngine source;
+    fillRichSong (source);
+    const std::string good = serializeSong (source);
+
+    DrumEngine e;
+    e.setTempo (130.0);
+    e.getPattern().set (0, 0, StepState::Accent);
+    const std::string before = serializeSong (e);
+
+    const auto refused = [&] (const std::string& text) {
+        CHECK (! parseSong (text, e));
+        CHECK (serializeSong (e) == before);
+    };
+    refused ("");
+    refused ("hello");
+    refused ("{}");
+    refused (good.substr (0, good.size() / 2));
+    refused (good + "x");
+    refused (withNumber (good, "version", "2"));
+    refused (withNumber (good, "chainLength", "0"));
+    refused (withNumber (good, "chainLength", "129"));
+    refused (withNumber (good, "tempo", "\"fast\""));
+    auto replaced = good;
+    replaced.replace (replaced.find ("drumbox-song"), 12, "other-format");
+    refused (replaced);
+    auto shortPattern = good;
+    shortPattern.replace (shortPattern.find ("\"drums\":[") + 9, 2, "");
+    refused (shortPattern);
+    auto badEntry = good;
+    badEntry.replace (badEntry.find ("\"chain\":[") + 9, 1, "99,");
+    refused (badEntry);
+    auto badSound = good;
+    badSound.replace (badSound.find ("\"bass.cutoff\":") + 14, 3, "\"x\"");
+    refused (badSound);
+    refused (std::string (5 * 1024 * 1024, ' '));
+    refused (std::string (200, '[') + std::string (200, ']'));
+})
+
+TEST ("DBX-018 settings out of range are brought back into range", {
+    DrumEngine source;
+    fillRichSong (source);
+    std::string text = withNumber (serializeSong (source), "tempo", "9999");
+    text = withNumber (text, "swing", "-5");
+    text = withNumber (text, "track0.volume", "99");
+    text = withNumber (text, "track1.tune", "-500");
+    text = withNumber (text, "feedback", "7");
+    DrumEngine e;
+    CHECK (parseSong (text, e));
+    CHECK (e.getTempo() == Sequencer::maxTempo);
+    CHECK (e.getSwing() == 0.0);
+    CHECK (e.getMixer().getVolume (0) == maxVolume);
+    CHECK (e.getMixer().getTune (1) == -maxTuneSemitones);
+    CHECK (e.getEffects().delay().feedback.load() == 0.9f);
+})
+
+// ---- WAV export ----
+
+struct WavFile
+{
+    bool ok = false;
+    int channels = 0, rate = 0, bits = 0, format = 0;
+    size_t frames = 0, fileSize = 0;
+    std::vector<float> left, right;
+};
+
+WavFile readWav (const std::string& path)
+{
+    WavFile w;
+    const std::string bytes = readFile (path);
+    w.fileSize = bytes.size();
+    if (bytes.size() < 44 || bytes.compare (0, 4, "RIFF") != 0 || bytes.compare (8, 8, "WAVEfmt ") != 0 || bytes.compare (36, 4, "data") != 0)
+        return w;
+    const auto le = [&bytes] (size_t at, int n) {
+        std::uint32_t v = 0;
+        for (int i = 0; i < n; ++i)
+            v |= static_cast<std::uint32_t> (static_cast<unsigned char> (bytes[at + static_cast<size_t> (i)])) << (8 * i);
+        return v;
+    };
+    w.format = static_cast<int> (le (20, 2));
+    w.channels = static_cast<int> (le (22, 2));
+    w.rate = static_cast<int> (le (24, 4));
+    w.bits = static_cast<int> (le (34, 2));
+    const size_t dataBytes = le (40, 4);
+    w.ok = le (4, 4) == bytes.size() - 8 && dataBytes == bytes.size() - 44 && w.channels == 2 && w.bits == 24;
+    w.frames = dataBytes / 6;
+    for (size_t i = 0; i < w.frames; ++i)
+        for (int c = 0; c < 2; ++c)
+        {
+            const size_t at = 44 + i * 6 + static_cast<size_t> (c) * 3;
+            std::int32_t v = static_cast<std::int32_t> (le (at, 3));
+            if (v & 0x800000)
+                v -= 0x1000000;
+            (c == 0 ? w.left : w.right).push_back (static_cast<float> (v) / 8388607.0f);
+        }
+    return w;
+}
+
+// Kick on step 1 of pattern 0 only; the chain plays pattern 0 then an empty pattern 1.
+void kickThenSilence (DrumEngine& e)
+{
+    e.setTempo (120.0);
+    e.getSong().pattern (0).set (0, 0, StepState::Accent);
+    e.getSong().setChainLength (2);
+    e.getSong().setChainEntry (0, 0);
+    e.getSong().setChainEntry (1, 1);
+}
+
+constexpr size_t twoPatterns120 = 2 * numSteps * 5512 + numSteps; // 2 x 16 steps of 5512.5 samples
+
+TEST ("DBX-019 the WAV is stereo 24-bit 44.1 kHz and holds the chain played once", {
+    DrumEngine e;
+    kickThenSilence (e);
+    const std::string folder = "dbx019_out";
+    std::filesystem::remove_all (folder);
+    std::filesystem::create_directories (folder);
+    CHECK (exportMixWav (e, folder + "/mix.wav"));
+    const WavFile wav = readWav (folder + "/mix.wav");
+    CHECK (wav.ok && wav.format == 1 && wav.channels == 2 && wav.rate == 44100 && wav.bits == 24);
+    CHECK (wav.frames == 2 * 16 * 5512 + 16);
+    CHECK (wav.left == wav.right);
+    CHECK (peak (wav.left, 0, 5000) > 0.2f);
+    // the chain is not looped: nothing plays at its second pass
+    CHECK (peak (wav.left, wav.frames / 2, wav.frames) == 0.0f);
+    CHECK (twoPatterns120 == wav.frames);
+
+    const ExportedAudio audio = renderSongAudio (e);
+    CHECK (audio.mix.size() == wav.frames);
+    for (size_t i = 0; i < wav.frames; i += 997)
+        CHECK (std::fabs (wav.left[i] - audio.mix[i]) < 2.0e-7f);
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-019 the effect tails are kept after the chain, and only then", {
+    DrumEngine dry;
+    kickThenSilence (dry);
+    const ExportLength dryLength = measureExport (dry);
+    CHECK (dryLength.totalFrames == dryLength.chainFrames);
+
+    DrumEngine wet;
+    kickThenSilence (wet);
+    wet.getSong().setChainLength (1);
+    wet.getEffects().reverb().on.store (1.0f);
+    wet.getEffects().reverb().size.store (0.9f);
+    wet.getEffects().reverb().mix.store (1.0f);
+    wet.getMixer().setSend (0, 1.0f);
+    wet.getPattern().set (0, 15, StepState::Accent);
+    const ExportedAudio audio = renderSongAudio (wet);
+    CHECK (audio.length.totalFrames > audio.length.chainFrames + 10000);
+    CHECK (peak (audio.mix, audio.length.chainFrames, audio.mix.size()) > 1.0e-4f);
+    CHECK (std::fabs (audio.mix.back()) < 1.0e-3f);
+    CHECK (audio.length.totalFrames < audio.length.chainFrames + static_cast<size_t> (maxTailSeconds) * 44100);
+
+    // the song being exported is not disturbed: no playing, same text
+    const std::string before = serializeSong (wet);
+    CHECK (sameWave (renderSongMix (wet), audio.mix));
+    CHECK (serializeSong (wet) == before && ! wet.isPlaying());
+})
+
+TEST ("DBX-019 mute and solo are applied to the export, from the first sample", {
+    DrumEngine e;
+    e.getPattern().set (0, 0, StepState::Accent);
+    e.getPattern().set (1, 0, StepState::Accent);
+    e.getPattern().setBass (0, 36);
+    const auto mixOf = [&e] { return renderSongMix (e); };
+
+    const auto all = mixOf();
+    CHECK (peak (all) > 0.2f);
+    e.getMixer().setMute (0, true);
+    e.getMixer().setMute (1, true);
+    e.getMixer().setMute (mixerBass, true);
+    CHECK (peak (mixOf()) == 0.0f);
+
+    e.getMixer().setMute (0, false);
+    e.getMixer().setMute (1, false);
+    e.getMixer().setMute (mixerBass, false);
+    e.getMixer().setSolo (1, true);
+    const auto soloSnare = mixOf();
+    DrumEngine snareOnly;
+    snareOnly.getPattern().set (1, 0, StepState::Accent);
+    CHECK (sameWave (soloSnare, renderSongMix (snareOnly)));
+    e.getMixer().setMute (1, true); // a muted track stays silent even when soloed
+    CHECK (peak (mixOf()) == 0.0f);
+
+    e.getMixer().setMute (1, false);
+    e.getMixer().setSolo (1, false);
+    e.getMixer().setVolume (0, 0.5f);
+    e.getMixer().setMute (1, true);
+    e.getMixer().setMute (mixerBass, true);
+    DrumEngine half, full;
+    half.getPattern().set (0, 0, StepState::Accent);
+    half.getMixer().setVolume (0, 0.5f);
+    full.getPattern().set (0, 0, StepState::Accent);
+    CHECK (sameWave (mixOf(), renderSongMix (half)));
+    CHECK (std::fabs (peak (renderSongMix (half)) / peak (renderSongMix (full)) - 0.5f) < 0.01f);
+})
+
+TEST ("DBX-020 the stems export writes the mix and one file per track, all the same length", {
+    DrumEngine e;
+    kickThenSilence (e);
+    e.getPattern().set (1, 4, StepState::Normal);
+    e.getSong().pattern (1).set (0, 15, StepState::Accent);
+    e.getPattern().setBass (0, 36);
+    e.getPattern().setSynthNote (0, 0, 60);
+    e.getEffects().reverb().on.store (1.0f);
+    e.getMixer().setSend (mixerPad, 0.8f);
+    e.getMixer().setMute (1, true);
+    e.getMixer().setSolo (0, true);
+    e.getMixer().setSolo (mixerBass, true);
+
+    const std::string folder = "dbx020_out";
+    std::filesystem::remove_all (folder);
+    CHECK (! exportStemsWav (e, folder, "../evil"));
+    CHECK (! std::filesystem::exists (folder));
+    CHECK (exportStemsWav (e, folder, "My Song"));
+
+    int count = 0;
+    for ([[maybe_unused]] const auto& entry : std::filesystem::directory_iterator (folder))
+        ++count;
+    CHECK (count == numMixerTracks + 1);
+
+    const WavFile mix = readWav (folder + "/My Song_mix.wav");
+    CHECK (mix.ok && mix.rate == 44100 && mix.bits == 24 && mix.frames > 0);
+    CHECK (peak (mix.left) > 0.1f);
+    for (int t = 0; t < numMixerTracks; ++t)
+    {
+        const std::string number = (t < 9 ? "0" : "") + std::to_string (t + 1);
+        const WavFile stem = readWav (folder + "/My Song_" + number + "_" + mixerTrackNames[static_cast<size_t> (t)] + ".wav");
+        CHECK (stem.ok && stem.rate == 44100 && stem.bits == 24 && stem.frames == mix.frames);
+        const bool heard = t == 0 || t == mixerBass;
+        CHECK ((peak (stem.left) > 0.05f) == heard); // muted, or not soloed: silent
+    }
+    // the tail of the reverb is in the mix, after the chain
+    CHECK (mix.frames > twoPatterns120 + 1000);
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-020 without effects the stems add up to the mix", {
+    DrumEngine e;
+    e.getPattern().set (0, 0, StepState::Normal);
+    e.getPattern().set (1, 4, StepState::Normal);
+    e.getPattern().setBass (2, 40);
+    e.getPattern().setSynthNote (0, 0, 55);
+    e.getPattern().setPluckNote (3, 0, 70);
+    e.getPattern().setFx (0, 6, StepState::Normal);
+    e.getMixer().setVolume (0, 0.8f);
+    e.getMixer().setTune (1, 2.0f);
+    const ExportedAudio audio = renderSongAudio (e);
+    CHECK (audio.mix.size() == audio.length.totalFrames);
+    std::vector<float> sum (audio.mix.size(), 0.0f);
+    for (const auto& stem : audio.stems)
+    {
+        CHECK (stem.size() == audio.mix.size());
+        for (size_t i = 0; i < sum.size(); ++i)
+            sum[i] += stem[i];
+    }
+    float worst = 0.0f;
+    for (size_t i = 0; i < sum.size(); ++i)
+        worst = std::max (worst, std::fabs (sum[i] - audio.mix[i]));
+    CHECK (worst < 1.0e-4f);
+    CHECK (peak (audio.mix) > 0.2f);
 })
 
 int main (int argc, char** argv)

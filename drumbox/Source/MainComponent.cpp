@@ -342,6 +342,8 @@ void TrackStrip::refreshFromMixer()
     tune.setValue (mixer.getTune (track), juce::dontSendNotification);
     detune.setValue (mixer.getDetune (track), juce::dontSendNotification);
     send.setValue (mixer.getSend (track) * 100.0, juce::dontSendNotification);
+    muteButton.setToggleState (mixer.isMuted (track), juce::dontSendNotification);
+    soloButton.setToggleState (mixer.isSolo (track), juce::dontSendNotification);
 }
 
 void TrackStrip::setCurrentPosition (int position)
@@ -715,6 +717,26 @@ MainComponent::MainComponent()
     presetSave.onClick = [this] { askPresetName(); };
     addChildComponent (presetSave);
 
+    songLabel.setFont (juce::Font (juce::FontOptions (13.0f)));
+    songLabel.setColour (juce::Label::textColourId, palette::cream);
+    songLabel.setJustificationType (juce::Justification::centred);
+    addAndMakeVisible (songLabel);
+    const struct { juce::TextButton* button; const char* title; juce::KeyPress shortcut; void (MainComponent::*action)(); } fileButtons[] = {
+        { &openButton, "Open a song file", juce::KeyPress ('o', juce::ModifierKeys::commandModifier, 0), &MainComponent::openSong },
+        { &saveButton, "Save the song to a file", juce::KeyPress ('s', juce::ModifierKeys::commandModifier, 0), &MainComponent::saveSong },
+        { &exportButton, "Export the song as a stereo WAV file", juce::KeyPress ('e', juce::ModifierKeys::commandModifier, 0), &MainComponent::exportMix },
+        { &stemsButton, "Export the mix and one WAV file per track", juce::KeyPress ('e', juce::ModifierKeys::commandModifier | juce::ModifierKeys::shiftModifier, 0), &MainComponent::exportStems }
+    };
+    for (const auto& f : fileButtons)
+    {
+        f.button->setTitle (f.title);
+        f.button->setTooltip (f.title);
+        f.button->addShortcut (f.shortcut);
+        f.button->onClick = [this, action = f.action] { (this->*action)(); };
+        addAndMakeVisible (*f.button);
+    }
+    showSongName();
+
     loadStarterSong();
     chainLengthSlider.setValue (song.getChainLength(), juce::dontSendNotification);
 
@@ -728,6 +750,8 @@ MainComponent::MainComponent()
 MainComponent::~MainComponent()
 {
     stopTimer();
+    if (exportThread != nullptr)
+        exportThread->waitForThreadToExit (-1);
     deviceManager.removeAudioCallback (this);
 }
 
@@ -896,6 +920,165 @@ void MainComponent::syncControlsFromEngine()
     set (pluckMix, p.osc2Mix.load() * 100.0);
     for (auto& strip : trackStrips)
         strip->refreshFromMixer();
+
+    // what a song file also holds: tempo, swing, chain length and the effects
+    set (tempo, engine.getTempo());
+    set (swing, engine.getSwing());
+    chainLengthSlider.setValue (engine.getSong().getChainLength(), juce::dontSendNotification);
+    for (int e = 0; e < numEffects; ++e)
+    {
+        const auto settings = engine.getEffects().settings (e);
+        effectButtons[(size_t) e].setToggleState (settings[0].value->load() >= 0.5f, juce::dontSendNotification);
+        for (size_t k = 0; k < 3; ++k)
+            set (effectKnobs[(size_t) e][k], settings[k + 1].value->load() * effectScale[(size_t) e][k]);
+    }
+    repaint();
+}
+
+juce::File MainComponent::songsFolder() const
+{
+    const auto folder = juce::File::getSpecialLocation (juce::File::userDocumentsDirectory).getChildFile ("DrumBox").getChildFile ("songs");
+    folder.createDirectory();
+    return folder;
+}
+
+juce::String MainComponent::songBaseName() const
+{
+    const auto name = songFile.getFileNameWithoutExtension();
+    return isValidPresetName (name.toStdString()) ? name : juce::String ("song");
+}
+
+void MainComponent::showSongName()
+{
+    songLabel.setText (songFile == juce::File() ? juce::String ("untitled song") : songFile.getFileName(), juce::dontSendNotification);
+}
+
+void MainComponent::openSong()
+{
+    const auto start = songFile.existsAsFile() ? songFile : songsFolder();
+    chooser = std::make_unique<juce::FileChooser> ("Open a song", start, "*.dbox");
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectFiles,
+                          [this] (const juce::FileChooser& fc)
+                          {
+                              if (fc.getResult() != juce::File())
+                                  loadSongFrom (fc.getResult());
+                          });
+}
+
+void MainComponent::loadSongFrom (const juce::File& file)
+{
+    if (! loadSongFile (engine, file.getFullPathName().toStdString()))
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Open song",
+                                                file.getFileName() + " is not a Drum Box song, or it is damaged.\nThe song in the window is unchanged.");
+        return;
+    }
+    songFile = file;
+    showSongName();
+    selectPattern (0);
+    for (int p = 0; p < numPatterns; ++p)
+        patternButtons[(size_t) p].setToggleState (p == 0, juce::dontSendNotification);
+    syncControlsFromEngine();
+}
+
+void MainComponent::saveSong()
+{
+    const auto start = songFile != juce::File() ? songFile : songsFolder().getChildFile ("my song.dbox");
+    chooser = std::make_unique<juce::FileChooser> ("Save the song", start, "*.dbox");
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [this] (const juce::FileChooser& fc)
+                          {
+                              auto file = fc.getResult();
+                              if (file == juce::File())
+                                  return;
+                              if (! file.hasFileExtension ("dbox"))
+                                  file = file.getSiblingFile (file.getFileName() + ".dbox");
+                              saveSongTo (file);
+                          });
+}
+
+void MainComponent::saveSongTo (const juce::File& file)
+{
+    if (! saveSongFile (engine, file.getFullPathName().toStdString()))
+    {
+        juce::AlertWindow::showMessageBoxAsync (juce::MessageBoxIconType::WarningIcon, "Save song",
+                                                "The song could not be saved to " + file.getFullPathName() + ".\nCheck that the folder exists and can be written to.");
+        return;
+    }
+    songFile = file;
+    showSongName();
+}
+
+// The offline render reads the song without touching the playing engine, so it runs on its own thread
+// beside the music while the file buttons wait.
+void MainComponent::runExport (const juce::String& title, const std::function<bool()>& work, const juce::String& done)
+{
+    if (exportThread != nullptr)
+        return;
+    struct Job : juce::Thread
+    {
+        Job (std::function<bool()> w, std::function<void (bool)> f) : Thread ("Export"), job (std::move (w)), finished (std::move (f)) {}
+        void run() override
+        {
+            const bool ok = job();
+            juce::MessageManager::callAsync ([f = finished, ok] { f (ok); });
+        }
+        std::function<bool()> job;
+        std::function<void (bool)> finished;
+    };
+    for (auto* b : { &openButton, &saveButton, &exportButton, &stemsButton })
+        b->setEnabled (false);
+    songLabel.setText ("exporting...", juce::dontSendNotification);
+    juce::Component::SafePointer<MainComponent> self (this);
+    exportThread = std::make_unique<Job> (work, [self, title, done] (bool ok)
+                                          {
+                                              if (self == nullptr)
+                                                  return;
+                                              for (auto* b : { &self->openButton, &self->saveButton, &self->exportButton, &self->stemsButton })
+                                                  b->setEnabled (true);
+                                              self->showSongName();
+                                              self->exportThread.reset();
+                                              juce::AlertWindow::showMessageBoxAsync (ok ? juce::MessageBoxIconType::InfoIcon : juce::MessageBoxIconType::WarningIcon,
+                                                                                      title,
+                                                                                      ok ? done : juce::String ("The export failed. Check that the folder can be written to."));
+                                          });
+    exportThread->startThread();
+}
+
+void MainComponent::exportMix()
+{
+    const auto folder = songFile.existsAsFile() ? songFile.getParentDirectory() : songsFolder();
+    chooser = std::make_unique<juce::FileChooser> ("Export the song as WAV", folder.getChildFile (songBaseName() + ".wav"), "*.wav");
+    chooser->launchAsync (juce::FileBrowserComponent::saveMode | juce::FileBrowserComponent::canSelectFiles
+                              | juce::FileBrowserComponent::warnAboutOverwriting,
+                          [this] (const juce::FileChooser& fc)
+                          {
+                              auto file = fc.getResult();
+                              if (file == juce::File())
+                                  return;
+                              if (! file.hasFileExtension ("wav"))
+                                  file = file.getSiblingFile (file.getFileName() + ".wav");
+                              runExport ("Export WAV", [this, file] { return exportMixWav (engine, file.getFullPathName().toStdString()); },
+                                         "The song was exported to " + file.getFullPathName() + ".");
+                          });
+}
+
+void MainComponent::exportStems()
+{
+    const auto folder = songFile.existsAsFile() ? songFile.getParentDirectory() : songsFolder();
+    chooser = std::make_unique<juce::FileChooser> ("Choose where to export the stems", folder);
+    chooser->launchAsync (juce::FileBrowserComponent::openMode | juce::FileBrowserComponent::canSelectDirectories,
+                          [this] (const juce::FileChooser& fc)
+                          {
+                              if (fc.getResult() == juce::File())
+                                  return;
+                              const auto base = songBaseName();
+                              const auto target = fc.getResult().getChildFile (base + " stems");
+                              runExport ("Export stems",
+                                         [this, target, base] { return exportStemsWav (engine, target.getFullPathName().toStdString(), base.toStdString()); },
+                                         "The mix and the twelve tracks were exported to " + target.getFullPathName() + ".");
+                          });
 }
 
 void MainComponent::fillPresetList()
@@ -1107,7 +1290,14 @@ void MainComponent::resized()
 
     side.removeFromLeft (14);
     playButton.setBounds (side.removeFromTop (64));
-    side.removeFromTop (14);
+    side.removeFromTop (10);
+    for (auto* b : { &openButton, &saveButton, &exportButton, &stemsButton })
+    {
+        b->setBounds (side.removeFromTop (30));
+        side.removeFromTop (4);
+    }
+    songLabel.setBounds (side.removeFromTop (20));
+    side.removeFromTop (10);
     const int knobBlock = (side.getHeight() - 14) / 2;
     auto tempoArea = side.removeFromTop (knobBlock);
     tempo.label.setBounds (tempoArea.removeFromTop (20));
