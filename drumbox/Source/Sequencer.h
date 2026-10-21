@@ -68,8 +68,14 @@ public:
     static constexpr double gateInSteps = 0.8;
 
 private:
-    template <class PatternAt, class PositionAt>
-    void run (PatternAt&& patternAt, PositionAt&& positionAt, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>* notes);
+    struct Placed
+    {
+        const Pattern& pattern;
+        int chainPosition;
+    };
+
+    template <class Locate>
+    void run (Locate&& locate, int numSamples, std::vector<Trigger>& out, std::vector<NoteEvent>* notes);
 
     double sampleRate = 44100.0;
     double tempo = 120.0;
@@ -78,5 +84,6 @@ private:
     std::int64_t nextStep = 0;
     int lastStep = -1;
     int lastChainPosition = -1;
+    int songPosition = -1; // chain position being played, -1 before the first step
 };
 } // namespace drumbox

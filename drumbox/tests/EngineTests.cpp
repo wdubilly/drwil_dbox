@@ -2,6 +2,7 @@
 // only the tests whose name starts with the prefix (each test name carries the
 // ID of the contract it protects).
 #include "../Source/DrumEngine.h"
+#include "../Source/PianoRoll.h"
 #include "../Source/Presets.h"
 #include "../Source/SongExport.h"
 #include "../Source/SongFile.h"
@@ -2256,6 +2257,252 @@ TEST ("DBX-020 without effects the stems add up to the mix", {
         worst = std::max (worst, std::fabs (sum[i] - audio.mix[i]));
     CHECK (worst < 1.0e-4f);
     CHECK (peak (audio.mix) > 0.2f);
+})
+
+namespace
+{
+void fillDistinct (Pattern& p, int seed)
+{
+    p.set (Kick, seed % numSteps, StepState::Accent);
+    p.set (Cowbell, (seed + 3) % numSteps, StepState::Normal);
+    p.setBass (seed % numSteps, 30 + seed, true);
+    p.setSynthNote (2, 1, 40 + seed);
+    p.setSynthAccent (2, true);
+    p.setPluckNote (5, 3, 50 + seed);
+    p.setPluckAccent (5, true);
+    p.setFx (4, 7, StepState::Accent);
+}
+
+bool samePattern (const Pattern& a, const Pattern& b)
+{
+    const auto x = a.capture();
+    const auto y = b.capture();
+    return x.cells == y.cells && x.fxCells == y.fxCells && x.bassNotes == y.bassNotes && x.bassAccents == y.bassAccents
+        && x.synthNotes == y.synthNotes && x.synthAccents == y.synthAccents && x.pluckNotes == y.pluckNotes
+        && x.pluckAccents == y.pluckAccents;
+}
+} // namespace
+
+TEST ("DBX-022 a copied pattern pastes onto another and the others are untouched", {
+    Song song;
+    for (int p = 0; p < numPatterns; ++p)
+        fillDistinct (song.pattern (p), p);
+    Song before;
+    for (int p = 0; p < numPatterns; ++p)
+        before.pastePattern (p, song.copyPattern (p));
+
+    const auto clip = song.copyPattern (3);
+    song.pastePattern (9, clip);
+    CHECK (samePattern (song.pattern (9), before.pattern (3)));
+    CHECK (samePattern (song.pattern (3), before.pattern (3)));
+    for (int p = 0; p < numPatterns; ++p)
+        if (p != 9)
+            CHECK (samePattern (song.pattern (p), before.pattern (p)));
+
+    // the clipboard is a snapshot: editing the source afterwards does not change what is pasted
+    song.pattern (3).set (Kick, 0, StepState::Off);
+    song.pastePattern (1, clip);
+    CHECK (samePattern (song.pattern (1), before.pattern (3)));
+})
+
+TEST ("DBX-022 a cleared pattern is empty and the others are untouched", {
+    Song song;
+    for (int p = 0; p < numPatterns; ++p)
+        fillDistinct (song.pattern (p), p);
+    Song before;
+    for (int p = 0; p < numPatterns; ++p)
+        before.pastePattern (p, song.copyPattern (p));
+
+    song.clearPattern (6);
+    CHECK (samePattern (song.pattern (6), Pattern()));
+    for (int p = 0; p < numPatterns; ++p)
+        if (p != 6)
+            CHECK (samePattern (song.pattern (p), before.pattern (p)));
+})
+
+TEST ("DBX-022 two swapped patterns trade places and the others are untouched", {
+    Song song;
+    for (int p = 0; p < numPatterns; ++p)
+        fillDistinct (song.pattern (p), p);
+    Song before;
+    for (int p = 0; p < numPatterns; ++p)
+        before.pastePattern (p, song.copyPattern (p));
+
+    song.swapPatterns (2, 11);
+    CHECK (samePattern (song.pattern (2), before.pattern (11)));
+    CHECK (samePattern (song.pattern (11), before.pattern (2)));
+    for (int p = 0; p < numPatterns; ++p)
+        if (p != 2 && p != 11)
+            CHECK (samePattern (song.pattern (p), before.pattern (p)));
+
+    song.swapPatterns (4, 4);
+    CHECK (samePattern (song.pattern (4), before.pattern (4)));
+})
+
+TEST ("DBX-022 a pasted pattern plays the same as the original", {
+    Song song;
+    fillDistinct (song.pattern (0), 1);
+    song.pastePattern (1, song.copyPattern (0));
+    song.setChainLength (2);
+    song.setChainEntry (1, 1);
+    auto seq = makeSequencer (120.0, 0.0);
+    const auto hits = collectSong (seq, song, static_cast<long long> (seq.samplesPerStep() * 32.0 - 1.0));
+    CHECK (hits.size() == 4);
+    CHECK (hits.size() == 4 && hits[0].track == hits[2].track && hits[1].track == hits[3].track);
+})
+
+namespace
+{
+std::vector<int> positionsPerBar (Sequencer& seq, const Song& song, int bars, const std::function<void (int)>& beforeBar = {})
+{
+    std::vector<int> positions;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    const int stepSamples = static_cast<int> (seq.samplesPerStep());
+    for (int bar = 0; bar < bars; ++bar)
+    {
+        if (beforeBar)
+            beforeBar (bar);
+        for (int s = 0; s < numSteps; ++s)
+        {
+            out.clear();
+            notes.clear();
+            seq.process (song, stepSamples, out, notes);
+            if (s == numSteps - 1)
+                positions.push_back (seq.getLastChainPosition());
+        }
+    }
+    return positions;
+}
+} // namespace
+
+TEST ("DBX-023 a longer chain applies at once and plays on from the current position", {
+    Song song;
+    song.setChainLength (2);
+    auto seq = makeSequencer (240.0, 0.0);
+    const auto positions = positionsPerBar (seq, song, 6, [&] (int bar) {
+        if (bar == 1)
+            song.setChainLength (4);
+    });
+    const std::vector<int> expected { 0, 1, 2, 3, 0, 1 };
+    CHECK (positions == expected);
+})
+
+TEST ("DBX-023 a shorter chain keeps playing if the position is still inside it", {
+    Song song;
+    song.setChainLength (4);
+    auto seq = makeSequencer (240.0, 0.0);
+    const auto positions = positionsPerBar (seq, song, 6, [&] (int bar) {
+        if (bar == 1)
+            song.setChainLength (3);
+    });
+    const std::vector<int> expected { 0, 1, 2, 0, 1, 2 };
+    CHECK (positions == expected);
+})
+
+TEST ("DBX-023 a shorter chain that leaves the position outside returns to the first position", {
+    Song song;
+    song.setChainLength (4);
+    auto seq = makeSequencer (240.0, 0.0);
+    std::vector<int> positions;
+    std::vector<Trigger> out;
+    std::vector<NoteEvent> notes;
+    const int stepSamples = static_cast<int> (seq.samplesPerStep());
+    for (int s = 0; s < 3 * numSteps + 5; ++s)
+        seq.process (song, stepSamples, out, notes); // in the middle of position 3
+    CHECK (seq.getLastChainPosition() == 3);
+    song.setChainLength (2);
+    out.clear();
+    seq.process (song, stepSamples, out, notes);
+    CHECK (seq.getLastChainPosition() == 0);
+    CHECK (seq.getLastStep() == 5); // the beat goes on, only the position returns
+    for (int s = 0; s < 2 * numSteps; ++s)
+        seq.process (song, stepSamples, out, notes);
+    CHECK (seq.getLastChainPosition() == 0); // the two-position chain then loops: 0 (11 steps), 1 (16), 0 again
+})
+
+TEST ("DBX-023 the engine reports the new chain length at once while playing", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    auto& song = e.getSong();
+    song.setChainLength (4);
+    e.setTempo (240.0);
+    e.setPlaying (true);
+    const int stepSamples = static_cast<int> (sampleRate * 60.0 / 240.0 / 4.0);
+    renderEngine (e, stepSamples * (16 * 3 + 4));
+    CHECK (e.getCurrentChainPosition() == 3);
+    song.setChainLength (2);
+    renderEngine (e, stepSamples * 2);
+    CHECK (e.getCurrentChainPosition() == 0);
+    renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 1);
+    renderEngine (e, stepSamples * 16);
+    CHECK (e.getCurrentChainPosition() == 0);
+})
+
+TEST ("DBX-024 a bass note entered in the piano roll is the step-by-step data", {
+    Pattern byStep, byRoll;
+    byStep.setBass (4, 40, false);
+    byRoll.setBass (4, 40, false);
+    byStep.setBass (4, 43, false);
+    CHECK (pianoRoll::toggleNote (byRoll, RollTrack::Bass, 4, 43)); // one note per step: replaces
+    CHECK (samePattern (byStep, byRoll));
+    CHECK (pianoRoll::notesAt (byRoll, RollTrack::Bass, 4) == std::vector<int> { 43 });
+
+    byRoll.setBass (4, 43, true); // an accent is kept when the note changes
+    pianoRoll::toggleNote (byRoll, RollTrack::Bass, 4, 45);
+    CHECK (byRoll.getBassNote (4) == 45 && byRoll.getBassAccent (4));
+    pianoRoll::toggleNote (byRoll, RollTrack::Bass, 4, 45); // same note again: off
+    CHECK (byRoll.getBassNote (4) == noNote);
+})
+
+TEST ("DBX-024 pad and pluck notes entered in the piano roll are the step-by-step data", {
+    Pattern byStep, byRoll;
+    byStep.setSynthNote (3, 0, 48);
+    byStep.setSynthNote (3, 1, 55);
+    byStep.setPluckNote (8, 0, 60);
+    byStep.setPluckNote (8, 1, 64);
+    byStep.setPluckNote (8, 2, 67);
+    CHECK (pianoRoll::toggleNote (byRoll, RollTrack::Pad, 3, 48));
+    CHECK (pianoRoll::toggleNote (byRoll, RollTrack::Pad, 3, 55));
+    for (int n : { 60, 64, 67 })
+        CHECK (pianoRoll::toggleNote (byRoll, RollTrack::Pluck, 8, n));
+    CHECK (samePattern (byStep, byRoll));
+    CHECK (pianoRoll::notesAt (byRoll, RollTrack::Pluck, 8) == std::vector<int> ({ 60, 64, 67 }));
+
+    CHECK (pianoRoll::toggleNote (byRoll, RollTrack::Pluck, 8, 64)); // off again, the others stay
+    CHECK (pianoRoll::notesAt (byRoll, RollTrack::Pluck, 8) == std::vector<int> ({ 60, 67 }));
+})
+
+TEST ("DBX-024 a fifth note on a pad or pluck step is refused and changes nothing", {
+    Pattern p;
+    for (int n : { 40, 44, 47, 52 })
+        CHECK (pianoRoll::toggleNote (p, RollTrack::Pad, 0, n));
+    const auto before = p.capture();
+    CHECK (! pianoRoll::toggleNote (p, RollTrack::Pad, 0, 59));
+    CHECK (p.capture().synthNotes == before.synthNotes);
+    pianoRoll::clearStep (p, RollTrack::Pad, 0);
+    CHECK (pianoRoll::notesAt (p, RollTrack::Pad, 0).empty());
+})
+
+TEST ("DBX-024 the step-by-step entry still works next to the piano roll", {
+    Pattern p;
+    pianoRoll::toggleNote (p, RollTrack::Pad, 1, 50);
+    p.setSynthNote (1, 1, 57); // set by step: both are heard and shown by the roll
+    CHECK (pianoRoll::notesAt (p, RollTrack::Pad, 1) == std::vector<int> ({ 50, 57 }));
+    CHECK (pianoRoll::toggleNote (p, RollTrack::Pad, 1, 57));
+    CHECK (p.getSynthNote (1, 1) == noNote);
+    CHECK (pianoRoll::toggleNote (p, RollTrack::Pad, 1, 90)); // goes into the free slot
+    CHECK (p.getSynthNote (1, 1) == 90);
+    CHECK (pianoRoll::notesAt (p, RollTrack::Pad, 1) == std::vector<int> ({ 50, 90 }));
+})
+
+TEST ("DBX-024 a note outside the playable range is brought back into it", {
+    Pattern p;
+    pianoRoll::toggleNote (p, RollTrack::Bass, 0, 5);
+    CHECK (p.getBassNote (0) == lowestNote);
+    pianoRoll::toggleNote (p, RollTrack::Pluck, 0, 200);
+    CHECK (p.getPluckNote (0, 0) == highestNote);
 })
 
 int main (int argc, char** argv)
