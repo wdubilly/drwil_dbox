@@ -10,6 +10,19 @@ FunkLookAndFeel::FunkLookAndFeel()
     setColour (juce::Label::textColourId, palette::cream);
     setColour (juce::TextButton::textColourOffId, palette::brownInk);
     setColour (juce::TextButton::textColourOnId, palette::brownInk);
+    setColour (juce::Slider::backgroundColourId, palette::brownInk);
+    setColour (juce::Slider::trackColourId, palette::orange);
+    setColour (juce::ComboBox::backgroundColourId, palette::mustard);
+    setColour (juce::ComboBox::textColourId, palette::brownInk);
+    setColour (juce::ComboBox::outlineColourId, palette::brownInk);
+    setColour (juce::ComboBox::arrowColourId, palette::brownInk);
+    setColour (juce::PopupMenu::backgroundColourId, palette::darkWood);
+    setColour (juce::PopupMenu::textColourId, palette::cream);
+    setColour (juce::PopupMenu::highlightedBackgroundColourId, palette::orange);
+    setColour (juce::PopupMenu::highlightedTextColourId, palette::brownInk);
+    setColour (juce::TooltipWindow::backgroundColourId, palette::brownInk);
+    setColour (juce::TooltipWindow::textColourId, palette::cream);
+    setColour (juce::TooltipWindow::outlineColourId, palette::mustard);
 }
 
 void FunkLookAndFeel::paintWood (juce::Graphics& g, juce::Rectangle<int> area)

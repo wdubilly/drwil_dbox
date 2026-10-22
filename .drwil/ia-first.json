@@ -133,6 +133,33 @@
       ]
     },
     {
+      "id": "dbx-033",
+      "name": "DBX-033 undo and redo over the whole song",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-033$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-034",
+      "name": "DBX-034 settings saved and restored",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-034$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
+      "id": "dbx-035",
+      "name": "DBX-035 demo song",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-035$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
       "id": "dbx-031",
       "name": "DBX-031 pattern chain plays the FX steps in time",
       "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-031$\" --no-tests=error --output-on-failure",

@@ -1,9 +1,9 @@
 # Project: Drum box, interface redesign (workflow, skins, undo)
 
-**Status**: scoped on 2026-10-22 — not started.
+**Status**: implemented on 2026-10-22 — engine tests green (`DBX-033` to `DBX-035`), app builds and links on Linux; `DBX-036` and `DBX-037` (and the rewritten interface contracts) await the human attestation.
 **Risk**: HIGH
 **Maturity**: ready
-**Intent**: `docs/intentions/ux-redesign.md`
+**Intent**: `docs/intentions/ux-followups.md`
 
 <!-- scope
 files:
@@ -73,6 +73,6 @@ None open.
 
 ## 7. Hand-off
 
-- **Last state** (2026-10-22): scoped, not started.
-- **Uncommitted work**: none.
-- **Next step**: [human] start the workstream (`/drwil-start`).
+- **Last state** (2026-10-22): all four increments implemented on branch `workstream/drum-box-ux`; `node .githooks/run-checks.mjs` green; the interface was built and linked on Linux but never run on a screen by the agent.
+- **Uncommitted work**: committed with the closing.
+- **Next step**: [human] try the app and attest `DBX-036`, `DBX-037` and the rewritten `DBX-006`, `DBX-010`, `DBX-013`, `DBX-017`, `DBX-021`, `DBX-025`, `DBX-028`, `DBX-032` (`drwil attest`); follow-ups in `docs/intentions/ux-followups.md`.
