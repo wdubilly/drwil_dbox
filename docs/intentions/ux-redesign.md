@@ -1,6 +1,6 @@
 # Intent: UX redesign of the drum box interface
 
-**Status**: stated on 2026-10-22; not scoped yet.
+**Status**: scoped on 2026-10-22 into `docs/projects/drum-box-ux.md`.
 **Priority**: P1
 
 ## Need
@@ -25,7 +25,7 @@ Read on 2026-10-22: eight tabs (DRUMS, BASS, PAD, PLUCK, FX, CHAIN, TRACKS, EFFE
 
 - [decision] Old tabs: decided on 2026-10-22, they are replaced (no parallel old layout).
 - [decision] Scope: decided on 2026-10-22, everything in one workstream.
-- [decision] Skin: decided on 2026-10-22, a skin selector; the default skin is really modern, the 70's funk look stays as an option. Still open: the modern direction (dark, neon, flat, glass) and which skins besides these two.
-- [decision] Undo and redo: engine-level (every edit) or interface-level only? Not decided.
-- [decision] The attested interface contracts (`DBX-006`, `DBX-010`, `DBX-013`, `DBX-017`, `DBX-021`, `DBX-025`, `DBX-028`, `DBX-032`) describe the old tabs: rewrite them for the new layout and have the human attest again.
-- [decision] Window size to design for (minimum width and height), and whether the layout must scale.
+- [decision] Skin: decided on 2026-10-22, a skin selector; the default skin is dark and flat with one accent colour per track, and the 70's funk look stays as an option. No other skin planned.
+- [decision] Undo and redo: decided on 2026-10-22, the whole song, engine included.
+- [decision] The attested interface contracts (`DBX-006`, `DBX-010`, `DBX-013`, `DBX-017`, `DBX-021`, `DBX-025`, `DBX-028`, `DBX-032`) describe the old tabs: modified in the brief, with new attestations.
+- [decision] Window size: decided on 2026-10-22, the layout scales with the screen (resizable window, remembered size); minimum size (960 by 600 pixels) set in the brief.
