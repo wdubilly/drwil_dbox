@@ -1,9 +1,12 @@
 // Plain C++ tests: no audio device, no JUCE. Run `drumbox_tests <prefix>` to run
 // only the tests whose name starts with the prefix (each test name carries the
 // ID of the contract it protects).
+#include "../Source/DemoSong.h"
 #include "../Source/DrumEngine.h"
+#include "../Source/EditHistory.h"
 #include "../Source/PianoRoll.h"
 #include "../Source/Presets.h"
+#include "../Source/Settings.h"
 #include "../Source/SongExport.h"
 #include "../Source/SongFile.h"
 
@@ -2503,6 +2506,257 @@ TEST ("DBX-024 a note outside the playable range is brought back into it", {
     CHECK (p.getBassNote (0) == lowestNote);
     pianoRoll::toggleNote (p, RollTrack::Pluck, 0, 200);
     CHECK (p.getPluckNote (0, 0) == highestNote);
+})
+
+// Every kind of edit the interface makes, applied to the engine; each one must be undone and redone.
+struct EditCase
+{
+    const char* name;
+    std::function<void (DrumEngine&)> edit;
+};
+
+std::vector<EditCase> allEdits()
+{
+    return {
+        { "step", [] (DrumEngine& e) { e.getSong().pattern (2).cycle (Snare, 5); } },
+        { "fx step", [] (DrumEngine& e) { e.getSong().pattern (0).setFx (3, 9, StepState::Accent); } },
+        { "bass note", [] (DrumEngine& e) { e.getSong().pattern (0).setBass (4, 40, true); } },
+        { "pad note", [] (DrumEngine& e) { e.getSong().pattern (1).setSynthNote (2, 1, 64); } },
+        { "pluck note", [] (DrumEngine& e) { e.getSong().pattern (1).setPluckNote (7, 3, 70); } },
+        { "paste", [] (DrumEngine& e) { e.getSong().pastePattern (3, e.getSong().copyPattern (0)); } },
+        { "clear", [] (DrumEngine& e) { e.getSong().clearPattern (0); } },
+        { "swap", [] (DrumEngine& e) { e.getSong().swapPatterns (0, 1); } },
+        { "chain entry", [] (DrumEngine& e) { e.getSong().setChainEntry (1, 5); } },
+        { "chain length", [] (DrumEngine& e) { e.getSong().setChainLength (9); } },
+        { "mute", [] (DrumEngine& e) { e.getMixer().setMute (3, true); } },
+        { "solo", [] (DrumEngine& e) { e.getMixer().setSolo (8, true); } },
+        { "volume", [] (DrumEngine& e) { e.getMixer().setVolume (2, 0.4f); } },
+        { "tune", [] (DrumEngine& e) { e.getMixer().setTune (9, 5.0f); } },
+        { "send", [] (DrumEngine& e) { e.getMixer().setSend (10, 0.7f); } },
+        { "effect", [] (DrumEngine& e) { e.getEffects().settings (4)[0].value->store (1.0f); } },
+        { "tempo", [] (DrumEngine& e) { e.setTempo (141.0); } },
+        { "swing", [] (DrumEngine& e) { e.setSwing (40.0); } },
+        { "sound knob", [] (DrumEngine& e) { e.getBassParams().cutoff = 1234.0f; } },
+        { "preset", [] (DrumEngine& e) { PresetBank (e).apply (PresetBank::factory (PresetKind::Pad).back()); } },
+    };
+}
+
+TEST ("DBX-033 every kind of edit can be undone, then redone to the same song", {
+    for (const auto& c : allEdits())
+    {
+        DrumEngine e;
+        fillRichSong (e);
+        EditHistory history (e);
+        const std::string before = serializeSong (e);
+        c.edit (e);
+        const std::string after = serializeSong (e);
+        CHECK (history.commit());
+        CHECK (after != before);
+        CHECK (history.canUndo() && ! history.canRedo());
+        CHECK (history.undo());
+        CHECK (serializeSong (e) == before);
+        CHECK (history.canRedo());
+        CHECK (history.redo());
+        CHECK (serializeSong (e) == after);
+        CHECK (! history.canRedo());
+        if (serializeSong (e) != after)
+            std::cerr << "  edit: " << c.name << "\n";
+    }
+})
+
+TEST ("DBX-033 a long run of edits is undone one step at a time and redone to the very same songs", {
+    DrumEngine e;
+    EditHistory history (e);
+    std::vector<std::string> states { serializeSong (e) };
+    for (const auto& c : allEdits())
+    {
+        c.edit (e);
+        history.commit();
+        states.push_back (serializeSong (e));
+    }
+    for (size_t i = states.size() - 1; i > 0; --i)
+    {
+        CHECK (history.undo());
+        CHECK (serializeSong (e) == states[i - 1]);
+    }
+    CHECK (! history.canUndo() && ! history.undo());
+    for (size_t i = 1; i < states.size(); ++i)
+    {
+        CHECK (history.redo());
+        CHECK (serializeSong (e) == states[i]);
+    }
+    CHECK (! history.canRedo() && ! history.redo());
+})
+
+TEST ("DBX-033 a new edit after an undo drops the redo history", {
+    DrumEngine e;
+    EditHistory history (e);
+    e.setTempo (100.0);
+    history.commit();
+    e.setTempo (120.0);
+    history.commit();
+    CHECK (history.undo());
+    CHECK (history.canRedo());
+    e.setSwing (25.0);
+    CHECK (history.commit());
+    CHECK (! history.canRedo() && ! history.redo());
+    CHECK (e.getTempo() == 100.0 && e.getSwing() == 25.0);
+    CHECK (history.undo());
+    CHECK (e.getSwing() == 0.0 && e.getTempo() == 100.0);
+})
+
+TEST ("DBX-033 an edit not yet recorded is kept by an undo, and no change records no step", {
+    DrumEngine e;
+    EditHistory history (e);
+    CHECK (! history.commit() && ! history.canUndo());
+    e.setTempo (90.0);
+    CHECK (history.undo()); // records the tempo, then goes back before it
+    CHECK (e.getTempo() == 120.0);
+    CHECK (history.redo());
+    CHECK (e.getTempo() == 90.0);
+})
+
+TEST ("DBX-033 the history is bounded and reset forgets it", {
+    DrumEngine e;
+    EditHistory history (e);
+    for (size_t i = 0; i < EditHistory::maxSteps + 20; ++i)
+    {
+        e.setTempo (60.0 + static_cast<double> (i));
+        history.commit();
+    }
+    size_t undone = 0;
+    while (history.undo())
+        ++undone;
+    CHECK (undone == EditHistory::maxSteps);
+    history.reset();
+    CHECK (! history.canUndo() && ! history.canRedo());
+})
+
+TEST ("DBX-033 undo and redo do not stop or disturb the playback", {
+    DrumEngine e;
+    e.prepare (sampleRate);
+    EditHistory history (e);
+    e.setPlaying (true);
+    renderEngine (e, 20000);
+    e.getSong().pattern (0).set (Kick, 3, StepState::Accent);
+    history.commit();
+    CHECK (history.undo());
+    CHECK (e.isPlaying());
+    renderEngine (e, 20000);
+    CHECK (e.getCurrentStep() >= 0);
+})
+
+TEST ("DBX-034 settings written and read back are the same", {
+    AppSettings s;
+    s.skin = SkinId::Funk;
+    s.windowWidth = 1500;
+    s.windowHeight = 900;
+    s.firstLaunch = false;
+    const std::string folder = "dbx034_settings";
+    std::filesystem::remove_all (folder);
+    const std::string path = folder + "/nested/settings.cfg";
+    CHECK (saveSettings (s, path));
+    const AppSettings back = loadSettings (path);
+    CHECK (back.skin == SkinId::Funk && back.windowWidth == 1500 && back.windowHeight == 900 && ! back.firstLaunch);
+    CHECK (serializeSettings (back) == serializeSettings (s));
+    CHECK (! std::filesystem::exists (path + ".tmp"));
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-034 a missing or damaged settings file gives the defaults without failing", {
+    const std::string folder = "dbx034_damaged";
+    std::filesystem::remove_all (folder);
+    std::filesystem::create_directories (folder);
+    const auto isDefault = [] (const AppSettings& a)
+    {
+        return a.skin == SkinId::Dark && a.windowWidth == 0 && a.windowHeight == 0 && a.firstLaunch;
+    };
+    CHECK (isDefault (loadSettings (folder + "/absent.cfg")));
+    CHECK (isDefault (loadSettings (folder)));
+
+    AppSettings good;
+    good.skin = SkinId::Funk;
+    good.windowWidth = 1200;
+    good.windowHeight = 700;
+    good.firstLaunch = false;
+    const std::string text = serializeSettings (good);
+    const std::vector<std::string> damaged {
+        "", "garbage", "\x01\x02\xff\xfe", text.substr (0, text.size() / 2), "skin=neon\n" + text,
+        "drumbox-settings=1\nskin=dark\nwidth=-5\nheight=700\nfirstLaunch=false\n",
+        "drumbox-settings=1\nskin=dark\nwidth=100\nheight=700\nfirstLaunch=false\n",
+        "drumbox-settings=1\nskin=dark\nwidth=99999999999\nheight=700\nfirstLaunch=false\n",
+        "drumbox-settings=1\nskin=dark\nwidth=1200\nheight=0\nfirstLaunch=false\n",
+        "drumbox-settings=2\nskin=dark\nwidth=1200\nheight=700\nfirstLaunch=false\n",
+        "drumbox-settings=1\nskin=dark\nwidth=1200\nheight=700\nfirstLaunch=maybe\n",
+    };
+    for (size_t i = 0; i < damaged.size(); ++i)
+    {
+        std::ofstream (folder + "/bad.cfg", std::ios::binary | std::ios::trunc) << damaged[i];
+        const AppSettings loaded = loadSettings (folder + "/bad.cfg");
+        CHECK (isDefault (loaded));
+        AppSettings untouched = good;
+        CHECK (! parseSettings (damaged[i], untouched));
+        CHECK (untouched.skin == SkinId::Funk && untouched.windowWidth == 1200);
+    }
+    std::filesystem::remove_all (folder);
+})
+
+TEST ("DBX-034 the window size follows the screen, stays above the minimum and inside the screen", {
+    AppSettings s;
+    WindowSize w = fitWindowSize (s, 1920, 1080);
+    CHECK (w.width == 1536 && w.height == 864);
+    w = fitWindowSize (s, 1280, 720);
+    CHECK (w.width == 1024 && w.height == 600);
+    w = fitWindowSize (s, 800, 500);
+    CHECK (w.width == minWindowWidth && w.height == minWindowHeight);
+    s.windowWidth = 1300;
+    s.windowHeight = 800;
+    w = fitWindowSize (s, 1920, 1080);
+    CHECK (w.width == 1300 && w.height == 800);
+    w = fitWindowSize (s, 1100, 700);
+    CHECK (w.width == 1100 && w.height == 700);
+})
+
+TEST ("DBX-035 the demo song is a valid song file that survives a save and an open", {
+    DrumEngine e;
+    loadDemoSong (e);
+    const std::string text = serializeSong (e);
+    DrumEngine back;
+    CHECK (parseSong (text, back));
+    CHECK (serializeSong (back) == text);
+    CHECK (e.getSong().getChainLength() == 4);
+    CHECK (e.getTempo() >= Sequencer::minTempo && e.getTempo() <= Sequencer::maxTempo);
+})
+
+TEST ("DBX-035 the demo song sounds on the drums, the bass and the pad", {
+    const struct { const char* name; int mixerTrack; } tracks[] = { { "drums", Kick }, { "snare", Snare }, { "hat", ClosedHat },
+                                                                     { "bass", mixerBass }, { "pad", mixerPad }, { "pluck", mixerPluck } };
+    for (const auto& t : tracks)
+    {
+        DrumEngine e;
+        e.prepare (sampleRate);
+        loadDemoSong (e);
+        for (int m = 0; m < numMixerTracks; ++m)
+            e.getMixer().setMute (m, m != t.mixerTrack);
+        e.settleMixer();
+        e.setPlaying (true);
+        const float level = peak (renderEngine (e, static_cast<int> (sampleRate * 3.0)));
+        CHECK (level > 0.05f);
+        if (level <= 0.05f)
+            std::cerr << "  silent track: " << t.name << "\n";
+    }
+})
+
+TEST ("DBX-035 the demo song replaces what was there and keeps playing state", {
+    DrumEngine e;
+    fillRichSong (e);
+    e.getSong().pattern (9).set (Kick, 0, StepState::Accent);
+    loadDemoSong (e);
+    CHECK (e.getSong().pattern (9).get (Kick, 0) == StepState::Off);
+    DrumEngine fresh;
+    loadDemoSong (fresh);
+    for (int p = 0; p < numPatterns; ++p)
+        CHECK (e.getSong().copyPattern (p).cells == fresh.getSong().copyPattern (p).cells);
 })
 
 int main (int argc, char** argv)

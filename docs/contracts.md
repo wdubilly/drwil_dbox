@@ -186,14 +186,14 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box — « The standalone app starts, plays and stops from its own window »
 
-## DBX-006 — The interface is easy to use and has a 70's funk feel
-**Rule** : The standalone window is easy to use (16×8 step grid, tempo and swing knobs, one play/stop button, readable states) and has a 70's funk look: warm orange, brown and mustard palette, wood grain, chunky knobs.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
-**Source of truth** : `drumbox/Source/FunkLookAndFeel.cpp`
+## DBX-006 — The interface is easy to use and has a dark flat default look
+**Rule** : The standalone window is easy to use (a play/stop button, tempo and swing bars, readable step states) and looks dark and flat by default, with one accent colour per track; the 70's funk look (warm orange, brown and mustard palette, wood grain, chunky knobs) stays available as a skin option, judged under `DBX-037`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/Theme.cpp`, `drumbox/Source/FlatLookAndFeel.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+**Source of truth** : `drumbox/Source/Theme.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the look and feel is the product's identity, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the interface is easy to use and has a 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box — « The interface is easy to use and has a 70's funk feel »
+**Manual** : the human tries the app and attests that the interface is easy to use and that its default look is dark and flat (`drwil attest`, human gesture).
+**Origin** : drum-box — « The interface is easy to use and has a 70's funk feel »; drum-box-ux — the default look becomes dark and flat, the funk look a skin option
 
 ## DBX-007 — Patterns chain into a longer sequence that loops
 **Rule** : The song holds 16 patterns (each with the drums, the bass line and the synth) and a chain of 1 to 128 positions naming the pattern played at each; the sequencer plays the patterns of the chain one after the other in time (16 steps each, within one sample, independent of the audio block size), then loops to the first position. A chain of one position plays that pattern alone, exactly as `DBX-001` to `DBX-005` require.
@@ -225,14 +225,14 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-song — « The synth is a four-voice polyphonic voice (two oscillators, filter, envelope, LFO) playing the notes set on its steps »
 
-## DBX-010 — The bass, synth and chain editors are easy to use and keep the 70's funk feel
-**Rule** : The standalone window lets the user edit the bass line and the synth step by step (note on/off, pitch by drag or wheel, accent), choose among the 16 patterns, and build the chain (a position grid and its length), while staying easy to use and keeping the 70's funk look of `DBX-006`.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
+## DBX-010 — The bass, synth and chain editors are easy to use
+**Rule** : The standalone window lets the user edit the bass line and the synth in the piano roll of the detail panel (note on/off, accent), choose among the 16 patterns in the pattern bar, and build the chain as a strip of positions under the grid with its length, easily; the overall workflow is judged under `DBX-036`.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/DetailPanel.cpp`, `drumbox/Source/Widgets.cpp`)
 **Source of truth** : `drumbox/Source/MainComponent.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the editors are the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the bass, synth, pattern bank and chain editors are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-song — « The interface lets the user edit the bass and the synth, build the chain, and stays easy to use with the 70's funk feel »
+**Manual** : the human tries the app and attests that the bass and synth piano rolls, the pattern bank and the chain strip are easy to use (`drwil attest`, human gesture).
+**Origin** : drum-box-song — « The interface lets the user edit the bass and the synth, build the chain, and stays easy to use with the 70's funk feel »; drum-box-ux — the per-instrument tabs are replaced by the detail panel and the chain strip
 
 ## DBX-026 — The pluck is a four-voice synth whose notes start at once and decay quickly
 **Rule** : Each step of a pattern can carry up to four pluck notes (and an accent flag) that play together; the pluck has four voices (a fifth note takes over the oldest), each with an instant attack, a short decay that ends the note even while the key is held, and a low-pass filter that closes quickly along with the decay; each note plays at the pitch set on its step (within 3%), an empty step is silent, an accent is at least 1.3 times the peak of a normal step, and the sound is finite, bounded and ends. The sound of the drums, the bass and the synth is unchanged by the pluck.
@@ -254,14 +254,14 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-pluck — « Each pattern holds the pluck notes next to the drums, the bass and the pad, and the pattern chain plays them in time »
 
-## DBX-028 — The PAD and PLUCK views are easy to use and keep the 70's funk feel
-**Rule** : The standalone window shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes step by step (note on/off, pitch by drag or wheel, accent) and its sound knobs, while staying easy to use and keeping the 70's funk look of `DBX-006`.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
-**Source of truth** : `drumbox/Source/MainComponent.cpp`
+## DBX-028 — The PAD and PLUCK editors are easy to use
+**Rule** : Selecting the PAD or the PLUCK track in the Sequence view shows, in the detail panel, its piano roll (note on/off, accent) and its sound bars, easily; the overall workflow is judged under `DBX-036`.
+**Scope** : the standalone window (`drumbox/Source/DetailPanel.cpp`, `drumbox/Source/MainComponent.cpp`)
+**Source of truth** : `drumbox/Source/DetailPanel.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the editors are the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the PAD view and the PLUCK view are easy to use and keep the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-pluck — « The interface shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes and sound, and stays easy to use with the 70's funk feel »
+**Manual** : the human tries the app and attests that the PAD and the PLUCK editors of the detail panel are easy to use (`drwil attest`, human gesture).
+**Origin** : drum-box-pluck — « The interface shows the existing synth as PAD, offers a PLUCK view to edit the pluck notes and sound, and stays easy to use with the 70's funk feel »; drum-box-ux — the tabs are replaced by the detail panel
 
 ## DBX-030 — The FX track has six distinct synthesised sounds, each producing sound when triggered
 **Rule** : The FX track holds six sounds, one step row each: siren (pitch sweeping up then down), laser (fast falling pitch), riser (noise rising in loudness and brightness), impact (low thump with a noise burst), whoosh (short white noise) and scratch (a saw dragged back and forth); each produces a finite, bounded sound that ends, any two differ in waveform, zero-crossing rate or length, an off step is silent and an accented hit is at least 1.3 times the peak of a normal one. The sound of the drums, the bass, the pad and the pluck is unchanged by the FX.
@@ -283,14 +283,14 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-fx — « Each pattern holds the FX steps next to the other tracks, and the pattern chain plays them in time »
 
-## DBX-032 — The FX view is easy to use and keeps the 70's funk feel
-**Rule** : The standalone window offers an FX view with the six step rows (siren, laser, riser, impact, whoosh, scratch; click a step: off, normal, accent), while staying easy to use and keeping the 70's funk look of `DBX-006`.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
-**Source of truth** : `drumbox/Source/MainComponent.cpp`
+## DBX-032 — The FX editor is easy to use
+**Rule** : Selecting the FX track in the Sequence view shows, in the detail panel, the six step rows (siren, laser, riser, impact, whoosh, scratch; click a step: off, normal, accent), easily; the overall workflow is judged under `DBX-036`.
+**Scope** : the standalone window (`drumbox/Source/DetailPanel.cpp`, `drumbox/Source/Widgets.cpp`)
+**Source of truth** : `drumbox/Source/Widgets.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the editors are the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the FX view is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-fx — « The interface offers an FX view with the six step rows, and stays easy to use with the 70's funk feel »
+**Manual** : the human tries the app and attests that the FX rows of the detail panel are easy to use (`drwil attest`, human gesture).
+**Origin** : drum-box-fx — « The interface offers an FX view with the six step rows, and stays easy to use with the 70's funk feel »; drum-box-ux — the FX tab is replaced by the detail panel
 
 ## DBX-011 — A muted track is silent, and with solo only the soloed tracks are heard
 **Rule** : Each of the twelve tracks (the eight drums, the bass, the pad, the pluck and the FX) can be muted and soloed, song-wide and outside any pattern; a muted track is silent (even when also in solo), with one or several tracks in solo only those tracks are heard, with none in solo every unmuted track is heard; the other tracks are unchanged. With no mute and no solo the sound is as before.
@@ -322,14 +322,14 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-mixer — « Every track gets a tune (±24 semitones) and a detune (±100 cents) »
 
-## DBX-013 — The TRACKS view stacks the twelve tracks and is easy to use with the 70's funk feel
-**Rule** : The standalone window offers a TRACKS view that stacks the eight drums, the bass, the pad, the pluck and the FX one above the other, each with the patterns of the chain where it plays, mute, solo, volume, tune and detune, and where clicking a track opens its editor, while staying easy to use and keeping the 70's funk look of `DBX-006`.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
-**Source of truth** : `drumbox/Source/MainComponent.cpp`
+## DBX-013 — The Sequence view stacks the twelve tracks and is easy to use
+**Rule** : The standalone window shows one Sequence view that stacks the eight drums, the bass, the pad, the pluck and the FX one above the other, each with mute, solo, volume and its 16 steps, a playhead over the steps while playing, and where clicking a track selects it for the detail panel (its tune, detune and effect send), easily.
+**Scope** : the standalone window (`drumbox/Source/SequenceView.cpp`, `drumbox/Source/MainComponent.cpp`)
+**Source of truth** : `drumbox/Source/SequenceView.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the track view is the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the TRACKS view shows the twelve tracks stacked with mute, solo, volume, tune and detune, that clicking a track opens its editor, and that it is easy to use and keeps the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-mixer — « A TRACKS view stacks the twelve tracks one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor »
+**Manual** : the human tries the app and attests that the Sequence view shows the twelve tracks stacked with mute, solo, volume and the steps, that the playhead follows the music, that clicking a track selects it, and that it is easy to use (`drwil attest`, human gesture).
+**Origin** : drum-box-mixer — « A TRACKS view stacks the twelve tracks one above the other, with mute, solo, volume, tune and detune on each, and clicking a track opens its editor »; drum-box-ux — the TRACKS tab becomes the Sequence view
 
 ## DBX-014 — Each of the five effects audibly changes the sound when on and leaves it untouched when off
 **Rule** : The engine offers five effects — reverb, delay, distortion, chorus and compressor — each with an on switch (off by default) and its own settings: when on, an effect audibly changes the sound (a tail for the reverb, echoes at its time for the delay, a squarer wave for the distortion, a moving copy for the chorus, lower loud levels for the compressor); when off it is skipped and the sound is exactly the one without it, so with all five off the engine sound is as before (`DBX-001` to `DBX-013` unchanged). Output stays finite and within ±1 whatever the settings.
@@ -362,13 +362,13 @@ contracts » section).
 **Origin** : drum-box-effects — « Presets are factory and user, on every track (drum kits, bass, pad, pluck, FX) »
 
 ## DBX-017 — The effects and presets are easy to use and sound good in the 70's funk spirit
-**Rule** : The standalone window offers an EFFECTS view (on switch and knobs for each of the five effects), a send knob on each track of the TRACKS view, and for each track editor a preset selector with a save button (factory presets, then user presets), while staying easy to use and keeping the 70's funk look of `DBX-006`; the factory presets and the effects sound good in the 70's funk spirit.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`)
-**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Rule** : The detail panel of the standalone window offers, for the selected track, a preset selector first with a save button (factory presets, then user presets), the effect send of the track, and the five effects (on switch and three bars each), easily; the factory presets and the effects sound good in the 70's funk spirit.
+**Scope** : the standalone window (`drumbox/Source/DetailPanel.cpp`, `drumbox/Source/MainComponent.cpp`)
+**Source of truth** : `drumbox/Source/DetailPanel.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or ease of use
 **Reason** : the interface and the sound are the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that the effects panel, the send knobs and the preset selectors are easy to use, that the factory presets and the effects sound good, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-effects — « The effects and presets are easy to use in the interface and sound good in the 70's funk spirit »
+**Manual** : the human tries the app and attests that the effects, the send bar and the preset selector of the detail panel are easy to use and that the factory presets and the effects sound good (`drwil attest`, human gesture).
+**Origin** : drum-box-effects — « The effects and presets are easy to use in the interface and sound good in the 70's funk spirit »; drum-box-ux — effects and presets move to the detail panel, presets first
 
 ## DBX-018 — A saved song opens again identical, mixer and effects included
 **Rule** : A song is saved to a `.dbox` file, JSON text with the file extension `.dbox`, and opened again identical: tempo, swing, the 16 patterns (drums, bass, pad, pluck and FX steps, notes and accents), the whole chain, the sound knobs of the bass, pad and pluck, the mixer of the twelve tracks (mute, solo, volume, tune, detune and send) and the settings of the five effects of the master chain; what a preset sets is stored as the sound it gave, so presets need no file of their own. A file that is not a song of this format, is damaged, is bigger than 4 MB, or is not named `.dbox` is refused and the song is left exactly as it was; an out-of-range setting is brought back into range, a setting the file lacks goes back to its default. A save never leaves a half-written file behind.
@@ -401,13 +401,13 @@ contracts » section).
 **Origin** : drum-box-songs — « The stems export writes one WAV file per track, plus the stereo mix, all of the same length »
 
 ## DBX-021 — Saving, opening and exporting are easy to use
-**Rule** : The standalone window offers OPEN SONG, SAVE SONG, EXPORT WAV and EXPORT STEMS buttons (with keyboard shortcuts), file dialogs that start in the songs folder (`DrumBox/songs` in the user's documents) and ask before overwriting, the name of the open song, a message when a file cannot be read or written, and an export that runs beside the music, while staying easy to use and keeping the 70's funk look of `DBX-006`.
+**Rule** : The fixed transport bar of the standalone window offers OPEN, SAVE, WAV and STEMS buttons (with keyboard shortcuts), file dialogs that start in the songs folder (`DrumBox/songs` in the user's documents) and ask before overwriting, the name of the open song, a message when a file cannot be read or written, and an export that runs beside the music, easily.
 **Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`)
 **Source of truth** : `drumbox/Source/MainComponent.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge ease of use
 **Reason** : saving and exporting is where the user's work is kept or lost, a matter of confidence that only the requester can judge
-**Manual** : the human tries the app and attests that saving, opening, exporting the WAV and exporting the stems are easy to find and to use, that the messages are clear, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-songs — « Saving, opening and exporting are available in the interface, easy to use »
+**Manual** : the human tries the app and attests that saving, opening, exporting the WAV and exporting the stems are easy to find and to use, and that the messages are clear (`drwil attest`, human gesture).
+**Origin** : drum-box-songs — « Saving, opening and exporting are available in the interface, easy to use »; drum-box-ux — the buttons move to the fixed transport bar
 
 ## DBX-022 — A pattern can be copied and pasted onto another, cleared or swapped, the others untouched
 **Rule** : The song offers, on its 16 patterns, copy (a snapshot of one pattern), paste (that snapshot written onto another pattern), clear (a pattern emptied) and swap (two patterns trading places). Each operation changes only the patterns it names, and a pattern copied or swapped plays exactly as the original did.
@@ -439,14 +439,62 @@ contracts » section).
 **Tests** : `drumbox/tests/EngineTests.cpp`
 **Origin** : drum-box-editing — « Notes entered in the piano roll give the same pattern data as the step-by-step entry, and the step-by-step entry still works »
 
-## DBX-025 — The pattern operations and the piano roll are easy to use and keep the 70's funk feel
-**Rule** : The standalone window offers COPY, PASTE, CLEAR (with a confirmation) and SWAP buttons next to the pattern bank, and a PIANO ROLL switch on the bass, pad and pluck views that shows a note grid (16 steps across, two octaves up, octave buttons, right-click for the accent) beside the step-by-step rows, while staying easy to use and keeping the 70's funk look of `DBX-006`.
-**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`)
+## DBX-025 — The pattern operations and the piano roll are easy to use
+**Rule** : The standalone window offers COPY, PASTE, CLEAR (with a confirmation) and SWAP buttons in the pattern bar, and the detail panel of the bass, pad and pluck tracks shows a piano roll (16 steps across, two octaves up, octave buttons, right-click for the accent), easily.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/Widgets.cpp`)
 **Source of truth** : `drumbox/Source/MainComponent.cpp`
 **Proof** : **human** — attested by the requester after trying the app; no machine can judge ease of use or taste
 **Reason** : editing tools are the product's face, a matter of taste that only the requester can accept
-**Manual** : the human tries the app and attests that copy, paste, clear, swap and the piano roll are easy to find and to use, and that it keeps the 70's funk feel (`drwil attest`, human gesture).
-**Origin** : drum-box-editing — « The pattern operations and the piano roll are easy to use in the interface, with the 70's funk feel »
+**Manual** : the human tries the app and attests that copy, paste, clear, swap and the piano roll are easy to find and to use (`drwil attest`, human gesture).
+**Origin** : drum-box-editing — « The pattern operations and the piano roll are easy to use in the interface, with the 70's funk feel »; drum-box-ux — the piano roll moves to the detail panel, the pattern operations to the pattern bar
+
+## DBX-033 — Every edit of the song can be undone and redone
+**Rule** : Every edit of the song (steps, notes, pattern operations, chain, mixer, effects, tempo, swing, presets) can be undone and redone; undo then redo returns exactly the same song (the song file text is identical); a new edit after an undo drops the redo history; edits made since the last recorded step are never lost by an undo; the history is bounded (200 steps) and can be reset; undo and redo leave the playback running.
+**Scope** : the drum box engine (`drumbox/Source/EditHistory.h`, `drumbox/Source/EditHistory.cpp`)
+**Source of truth** : `drumbox/Source/EditHistory.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-033` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a musician experiments only if every change can be taken back; a history over the song file text covers the engine too, as one source of truth
+**Check** : `dbx-033`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-ux — « Every edit of the song can be undone and redone, and undo then redo returns exactly the same song »
+
+## DBX-034 — The skin, the window size and the first-launch flag are saved and restored
+**Rule** : The chosen skin, the window size and the first-launch flag are written to a settings file and read back identically; a missing or damaged file gives the defaults (dark skin, size following the screen, first launch) without failing; a failed write leaves the previous file; the window size is never below 960 by 600 pixels nor beyond the screen (the minimum wins on a smaller screen) and defaults to 80 % of the screen.
+**Scope** : the drum box engine (`drumbox/Source/Settings.h`, `drumbox/Source/Settings.cpp`)
+**Source of truth** : `drumbox/Source/Settings.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-034` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : an app that forgets its look and size at each start feels broken, and one that fails on a damaged settings file cannot start
+**Check** : `dbx-034`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-ux — « The chosen skin, the window size and the first-launch flag are saved and restored between runs; a missing or damaged settings file gives the defaults without failing »
+
+## DBX-035 — The demo song is a valid song and sounds on drums, bass and pad
+**Rule** : The demo song loaded at first launch is a valid song file (it saves and parses back to the same song), plays audible sound on the drums (kick, snare, hats), the bass and the pad, and loading it replaces the previous song entirely.
+**Scope** : the drum box engine (`drumbox/Source/DemoSong.h`, `drumbox/Source/DemoSong.cpp`)
+**Source of truth** : `drumbox/Source/DemoSong.cpp`
+**Proof** : tests named after its ID in `drumbox/tests/EngineTests.cpp`, run by the check `dbx-035` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : a new user must hear music at the first click, and a demo that no longer sounds after an engine change would go unnoticed
+**Check** : `dbx-035`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+**Origin** : drum-box-ux — « At first launch a demo song is loaded; it plays audible sound on drums, bass and pad, and it is a valid song file »
+
+## DBX-036 — The main workflow is easy to adopt
+**Rule** : The Sequence view, the detail panel, the fixed transport bar, the pattern chain strip, the presets-first flow, the tooltips and the playhead make the main workflow easy to adopt: starting from the demo, a new user can change a pattern, a sound and the tempo without looking for a tab.
+**Scope** : the standalone window (`drumbox/Source/MainComponent.cpp`, `drumbox/Source/SequenceView.cpp`, `drumbox/Source/DetailPanel.cpp`, `drumbox/Source/Widgets.cpp`)
+**Source of truth** : `drumbox/Source/MainComponent.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge ease of adoption
+**Reason** : adoption is the point of the redesign, a judgement that only the requester can make
+**Manual** : the human opens the app, starting from the demo changes a pattern, a sound (preset first) and the tempo without looking for a tab, and checks the tooltips, the undo and redo buttons and the playhead (`drwil attest`, human gesture).
+**Origin** : drum-box-ux — « The Sequence view, the detail panel, the fixed transport bar, the chain strip, the presets-first flow, the tooltips and the playhead make the main workflow easy to adopt »
+
+## DBX-037 — The default skin is dark and flat, the 70's funk skin is selectable, and the layout scales
+**Rule** : The default skin is dark and flat with one accent colour per track, the skin selector switches to the 70's funk skin and back at once, and the layout scales with the window and the screen without overlap or clipping (the detail panel scrolls rather than clipping below the minimum size).
+**Scope** : the standalone window (`drumbox/Source/Theme.cpp`, `drumbox/Source/FlatLookAndFeel.cpp`, `drumbox/Source/FunkLookAndFeel.cpp`, `drumbox/Source/MainComponent.cpp`, `drumbox/Source/Main.cpp`)
+**Source of truth** : `drumbox/Source/Theme.cpp`
+**Proof** : **human** — attested by the requester after trying the app; no machine can judge taste or layout quality
+**Reason** : the look is the product's identity and the layout must hold on the requester's screens, which only they can check
+**Manual** : the human opens the app (dark flat, one colour per track), switches the skin to 70's funk and back, resizes the window from the minimum to full screen, and restarts to check that the skin and size are kept (`drwil attest`, human gesture).
+**Origin** : drum-box-ux — « The default skin is dark and flat with one accent colour per track, the selector switches to the 70's funk skin, and the layout scales with the screen without overlap or clipping »
 
 ## Out of registry (these are not contracts)
 

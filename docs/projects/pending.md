@@ -25,7 +25,7 @@ otherwise.
 
 ## Projects
 
-- [ ] [decision] [P1] Drum box, interface redesign (workflow, skins, undo): `docs/projects/drum-box-ux.md`
+- [ ] [decision] [P2] Drum box, follow-ups of the interface redesign: `docs/intentions/ux-followups.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines

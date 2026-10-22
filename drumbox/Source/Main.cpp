@@ -1,5 +1,5 @@
-#include "FunkLookAndFeel.h"
 #include "MainComponent.h"
+#include "Settings.h"
 
 #include <juce_gui_basics/juce_gui_basics.h>
 
@@ -12,37 +12,72 @@ public:
 
     void initialise (const juce::String&) override
     {
-        juce::LookAndFeel::setDefaultLookAndFeel (&lookAndFeel);
-        window = std::make_unique<MainWindow> (getApplicationName());
+        settingsPath = juce::File::getSpecialLocation (juce::File::userApplicationDataDirectory)
+                           .getChildFile ("DrumBox")
+                           .getChildFile ("settings.txt")
+                           .getFullPathName()
+                           .toStdString();
+        settings = drumbox::loadSettings (settingsPath);
+        window = std::make_unique<MainWindow> (getApplicationName(), settings, settingsPath);
     }
 
-    void shutdown() override
-    {
-        window.reset();
-        juce::LookAndFeel::setDefaultLookAndFeel (nullptr);
-    }
+    void shutdown() override { window.reset(); }
 
     void systemRequestedQuit() override { quit(); }
 
 private:
-    class MainWindow : public juce::DocumentWindow
+    // Remembers the size of the window: saved a moment after the last resize, and on close.
+    class MainWindow : public juce::DocumentWindow,
+                       private juce::Timer
     {
     public:
-        explicit MainWindow (juce::String name)
-            : DocumentWindow (name, drumbox::palette::darkWood, DocumentWindow::allButtons)
+        MainWindow (juce::String name, drumbox::AppSettings& appSettings, const std::string& path)
+            : DocumentWindow (name, juce::Colour (0xff1b1d22), DocumentWindow::allButtons), settings (appSettings), settingsPath (path)
         {
             setUsingNativeTitleBar (true);
-            setContentOwned (new MainComponent(), true);
+            setContentOwned (new MainComponent (settings, settingsPath), true);
             setResizable (true, true);
-            setResizeLimits (940, 640, 2400, 1400);
-            centreWithSize (getWidth(), getHeight());
+            setResizeLimits (drumbox::minWindowWidth, drumbox::minWindowHeight, 4000, 2400);
+
+            const auto area = juce::Desktop::getInstance().getDisplays().getPrimaryDisplay()->userArea;
+            const auto size = drumbox::fitWindowSize (settings, area.getWidth(), area.getHeight());
+            centreWithSize (size.width, size.height);
             setVisible (true);
         }
 
+        ~MainWindow() override { saveSize(); }
+
         void closeButtonPressed() override { juce::JUCEApplication::getInstance()->systemRequestedQuit(); }
+
+        void resized() override
+        {
+            DocumentWindow::resized();
+            if (isVisible())
+                startTimer (800);
+        }
+
+    private:
+        void timerCallback() override
+        {
+            stopTimer();
+            saveSize();
+        }
+
+        void saveSize()
+        {
+            if (isMinimised() || isFullScreen())
+                return;
+            settings.windowWidth = getWidth();
+            settings.windowHeight = getHeight();
+            drumbox::saveSettings (settings, settingsPath);
+        }
+
+        drumbox::AppSettings& settings;
+        std::string settingsPath;
     };
 
-    FunkLookAndFeel lookAndFeel;
+    drumbox::AppSettings settings;
+    std::string settingsPath;
     std::unique_ptr<MainWindow> window;
 };
 

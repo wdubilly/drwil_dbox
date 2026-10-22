@@ -12,12 +12,15 @@ option(DRUMBOX_BUILD_APP "Build the JUCE standalone application" ON)
 include(CTest)
 
 add_library(drumbox_engine STATIC
+    Source/DemoSong.cpp
     Source/DrumEngine.cpp
+    Source/EditHistory.cpp
     Source/Effects.cpp
     Source/Instruments.cpp
     Source/PianoRoll.cpp
     Source/Presets.cpp
     Source/Sequencer.cpp
+    Source/Settings.cpp
     Source/SongExport.cpp
     Source/SongFile.cpp
     Source/Voices.cpp)
@@ -34,7 +37,7 @@ if(BUILD_TESTING)
     if(NOT MSVC)
         target_compile_options(drumbox_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
     endif()
-    foreach(id DBX-001 DBX-002 DBX-003 DBX-004 DBX-005 DBX-007 DBX-008 DBX-009 DBX-011 DBX-012 DBX-029 DBX-026 DBX-027 DBX-030 DBX-031 DBX-014 DBX-015 DBX-016 DBX-018 DBX-019 DBX-020 DBX-022 DBX-023 DBX-024)
+    foreach(id DBX-001 DBX-002 DBX-003 DBX-004 DBX-005 DBX-007 DBX-008 DBX-009 DBX-011 DBX-012 DBX-029 DBX-026 DBX-027 DBX-030 DBX-031 DBX-014 DBX-015 DBX-016 DBX-018 DBX-019 DBX-020 DBX-022 DBX-023 DBX-024 DBX-033 DBX-034 DBX-035)
         add_test(NAME ${id} COMMAND drumbox_tests ${id})
     endforeach()
 endif()
@@ -55,6 +58,11 @@ if(DRUMBOX_BUILD_APP)
     target_sources(DrumBox PRIVATE
         Source/Main.cpp
         Source/MainComponent.cpp
+        Source/DetailPanel.cpp
+        Source/SequenceView.cpp
+        Source/Widgets.cpp
+        Source/Theme.cpp
+        Source/FlatLookAndFeel.cpp
         Source/FunkLookAndFeel.cpp)
 
     target_compile_definitions(DrumBox PRIVATE

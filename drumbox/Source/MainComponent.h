@@ -1,10 +1,16 @@
 #pragma once
 
+#include "DetailPanel.h"
 #include "DrumEngine.h"
-#include "PianoRoll.h"
+#include "EditHistory.h"
+#include "FlatLookAndFeel.h"
+#include "FunkLookAndFeel.h"
 #include "Presets.h"
+#include "SequenceView.h"
+#include "Settings.h"
 #include "SongExport.h"
 #include "SongFile.h"
+#include "Widgets.h"
 
 #include <juce_audio_devices/juce_audio_devices.h>
 #include <juce_gui_basics/juce_gui_basics.h>
@@ -13,161 +19,24 @@
 #include <functional>
 #include <memory>
 #include <optional>
-#include <vector>
 
-// The pattern being edited is shared by every editor: they read it at paint time.
-class StepButton : public juce::Button
-{
-public:
-    // A drum track, or a row of the FX track when isFxRow is set.
-    StepButton (drumbox::Song& songToEdit, const int& editedPattern, int trackIndex, int stepIndex, bool isFxRow = false);
-
-    void setCurrent (bool isCurrent);
-    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
-    void clicked() override;
-
-private:
-    drumbox::Pattern& pattern() const { return song.pattern (editing); }
-
-    drumbox::Song& song;
-    const int& editing;
-    int track, step;
-    bool fx;
-    bool current = false;
-};
-
-// One note of the bass (slot 0), of the pad or of the pluck (slot 0 to 3) on one step.
-// Click: on / off. Drag up or down, or mouse wheel: pitch. Right click: accent of the step.
-class NoteButton : public juce::Button
-{
-public:
-    enum class Kind { Bass, Pad, Pluck };
-
-    NoteButton (drumbox::Song& songToEdit, const int& editedPattern, Kind kindOfNote, int slotIndex, int stepIndex);
-
-    void setCurrent (bool isCurrent);
-    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
-    void clicked() override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void mouseDrag (const juce::MouseEvent&) override;
-    void mouseUp (const juce::MouseEvent&) override;
-    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
-
-    static juce::String noteName (int note);
-
-private:
-    drumbox::Pattern& pattern() const { return song.pattern (editing); }
-    int getNote() const;
-    void setNote (int note);
-    bool getAccent() const;
-    void toggleAccent();
-
-    drumbox::Song& song;
-    const int& editing;
-    Kind kind;
-    int slot, step;
-    int lastNote;
-    int dragStartNote = 0, dragStartY = 0;
-    bool dragged = false;
-    bool current = false;
-};
-
-// Piano roll of the bass, the pad or the pluck: the 16 steps across, the pitches up. It writes the same
-// pattern data as the step-by-step rows. Click: note on / off. Right-click: accent of the step.
-class PianoRollView : public juce::Component
-{
-public:
-    PianoRollView (drumbox::Song& songToEdit, const int& editedPattern, drumbox::RollTrack trackToEdit);
-
-    void setCurrentStep (int step);
-    void paint (juce::Graphics&) override;
-    void resized() override;
-    void mouseDown (const juce::MouseEvent&) override;
-    void mouseWheelMove (const juce::MouseEvent&, const juce::MouseWheelDetails&) override;
-
-private:
-    static constexpr int rows = 25;
-    static constexpr int keyWidth = 64;
-    juce::Rectangle<int> grid() const;
-    void shiftOctave (int octaves);
-    bool accentOf (int step) const;
-    void toggleAccent (int step);
-
-    drumbox::Song& song;
-    const int& editing;
-    drumbox::RollTrack track;
-    int lowest;
-    int current = -1;
-    juce::TextButton lower { "OCT -" }, higher { "OCT +" };
-};
-
-// One position of the chain: shows the pattern played there, click to assign the edited pattern.
-class ChainCell : public juce::Button
-{
-public:
-    ChainCell (drumbox::Song& songToEdit, const int& editedPattern, int positionIndex);
-
-    void setCurrent (bool isCurrent);
-    void paintButton (juce::Graphics&, bool highlighted, bool down) override;
-    void clicked() override;
-
-private:
-    drumbox::Song& song;
-    const int& editing;
-    int position;
-    bool current = false;
-};
-
-// One line of the TRACKS view: the track's name (click to open its editor), the patterns of the
-// chain where it plays, mute, solo, volume, tune and detune.
-class TrackStrip : public juce::Component
-{
-public:
-    TrackStrip (drumbox::Song& songToShow, drumbox::Mixer& mixerToEdit, int trackIndex, std::function<void (int)> onOpen);
-
-    // Called after a mute or a solo changes, so the other strips can show what is heard.
-    std::function<void()> onAudibilityChange;
-
-    void setCurrentPosition (int position);
-    // Shows again the mixer values of the track, after a preset changed them.
-    void refreshFromMixer();
-    void paint (juce::Graphics&) override;
-    void resized() override;
-    void mouseUp (const juce::MouseEvent&) override;
-
-private:
-    bool playsIn (const drumbox::Pattern&) const;
-    juce::Rectangle<int> mapArea() const;
-
-    drumbox::Song& song;
-    drumbox::Mixer& mixer;
-    int track;
-    std::function<void (int)> open;
-    int currentPosition = -1;
-    juce::TextButton nameButton, muteButton { "M" }, soloButton { "S" };
-    juce::Slider volume, tune, detune, send;
-};
-
+// The whole window: transport bar, pattern bar, sequence, chain and the detail panel of the selected track.
 class MainComponent : public juce::Component,
+                      public juce::DragAndDropContainer,
                       private juce::AudioIODeviceCallback,
                       private juce::Timer
 {
 public:
-    MainComponent();
+    // The settings are owned by the app; the skin is saved to `settingsPath` when it changes.
+    MainComponent (drumbox::AppSettings& appSettings, std::string settingsPath);
     ~MainComponent() override;
 
     void paint (juce::Graphics&) override;
     void resized() override;
+    void lookAndFeelChanged() override;
+    bool keyPressed (const juce::KeyPress&) override;
 
 private:
-    enum View { Drums = 0, Bass, Pad, Pluck, Fx, Chain, Tracks, Effects, numViews };
-
-    struct Knob
-    {
-        juce::Slider slider;
-        juce::Label label;
-    };
-
     void audioDeviceIOCallbackWithContext (const float* const* input, int numInputChannels, float* const* output,
                                            int numOutputChannels, int numSamples,
                                            const juce::AudioIODeviceCallbackContext&) override;
@@ -175,24 +44,20 @@ private:
     void audioDeviceStopped() override {}
     void timerCallback() override;
 
-    void updateTransportButton();
-    void showView (View view);
+    void addButton (juce::TextButton& button, const juce::String& text, const juce::String& tip, std::function<void()> action);
+    void togglePlay();
+    void selectTrack (int mixerTrack);
     void selectPattern (int index);
     void copyPattern();
     void pastePattern();
     void clearPattern();
     void armSwap();
-    bool rollShown() const { return rollMode && (view == Bass || view == Pad || view == Pluck); }
-    void openTrackEditor (int mixerTrack);
-    void addKnob (Knob& knob, const juce::String& text, double min, double max, double step, double initial,
-                  const juce::String& suffix, double skewMidPoint = 0.0);
-    void layoutKnobs (juce::Rectangle<int> area, const std::vector<Knob*>& knobs);
-    void loadStarterSong();
-    void syncControlsFromEngine();
-    void fillPresetList();
-    void applySelectedPreset();
-    void askPresetName();
-    void saveUserPreset (const juce::String& name);
+    void undo();
+    void redo();
+    void showEverythingFromEngine();
+    void updateHistoryButtons();
+    void loadDemo();
+    void changeSkin();
     void openSong();
     void saveSong();
     void exportMix();
@@ -203,66 +68,44 @@ private:
     void showSongName();
     juce::File songsFolder() const;
     juce::String songBaseName() const;
-    bool hasPresets() const { return view <= Fx; }
-    drumbox::PresetKind presetKind() const { return (drumbox::PresetKind) (int) view; }
+
+    drumbox::AppSettings& settings;
+    std::string settingsPath;
 
     drumbox::DrumEngine engine;
+    drumbox::EditHistory history { engine };
     juce::AudioDeviceManager deviceManager;
-    int editing = 0;
-    View view = Drums;
-
-    juce::TextButton playButton { "PLAY" };
-    std::array<juce::TextButton, numViews> viewButtons;
-    std::array<juce::TextButton, drumbox::numPatterns> patternButtons;
-    juce::TextButton copyButton { "COPY" }, pasteButton { "PASTE" }, clearButton { "CLEAR" }, swapButton { "SWAP" };
-    std::optional<drumbox::PatternData> clipboard;
-    bool swapArmed = false;
-    std::array<std::unique_ptr<PianoRollView>, 3> rolls; // bass, pad, pluck
-    juce::TextButton rollToggle { "PIANO ROLL" };
-    bool rollMode = false;
-    Knob tempo, swing;
-    juce::Label titleLabel, legendLabel, patternLabel, chainLengthLabel;
-    juce::Slider chainLengthSlider;
-
-    std::array<juce::Label, drumbox::numTracks> trackLabels;
-    std::array<std::unique_ptr<StepButton>, drumbox::numTracks * drumbox::numSteps> steps;
-    std::array<juce::Label, drumbox::numFxRows> fxLabels;
-    std::array<std::unique_ptr<StepButton>, drumbox::numFxRows * drumbox::numSteps> fxSteps;
-    std::array<std::unique_ptr<NoteButton>, drumbox::numSteps> bassSteps;
-    std::array<std::unique_ptr<NoteButton>, drumbox::synthVoices * drumbox::numSteps> synthSteps;
-    std::array<juce::Label, drumbox::synthVoices> synthSlotLabels;
-    std::array<std::unique_ptr<NoteButton>, drumbox::pluckVoices * drumbox::numSteps> pluckSteps;
-    std::array<juce::Label, drumbox::pluckVoices> pluckSlotLabels;
-    std::array<std::unique_ptr<ChainCell>, drumbox::maxChainLength> chainCells;
-    std::array<std::unique_ptr<TrackStrip>, drumbox::numMixerTracks> trackStrips;
-    juce::Label bassLabel;
-    Knob bassCutoff, bassDecay;
-    Knob osc2Semitones, osc2Detune, osc2Mix, synthCutoff, synthResonance, synthAttack, synthDecay, synthSustain,
-         synthRelease, lfoRate, lfoDepth;
-    Knob pluckCutoff, pluckDecay, pluckResonance, pluckMix;
-
-    // EFFECTS view: per effect an on button and three knobs
-    std::array<juce::TextButton, drumbox::numEffects> effectButtons;
-    std::array<std::array<Knob, 3>, drumbox::numEffects> effectKnobs;
-    std::array<std::array<float, 3>, drumbox::numEffects> effectScale;
-
-    // preset bar under the editors of the tracks
-    juce::Label presetLabel;
-    juce::ComboBox presetBox;
-    juce::TextButton presetSave { "SAVE" };
     drumbox::FolderPresetStore presetStore;
-    int userPresetFirstId = 1000;
+    FlatLookAndFeel flatLookAndFeel;
+    FunkLookAndFeel funkLookAndFeel;
+    juce::TooltipWindow tooltips { this, 500 };
 
-    // song files: open, save, export; songs live in a default folder and the user picks the file
-    juce::TextButton openButton { "OPEN SONG" }, saveButton { "SAVE SONG" }, exportButton { "EXPORT WAV" },
-                     stemsButton { "EXPORT STEMS" };
-    juce::Label songLabel;
+    int editing = 0;
+    int selectedTrack = 0;
+    int shownStep = -2;
+    int shownChainPosition = -2;
+    int shownChainLength = -1;
+    int ticks = 0;
+    bool swapArmed = false;
+    std::optional<drumbox::PatternData> clipboard;
     juce::File songFile;
+
+    juce::TextButton playButton, undoButton, redoButton, demoButton, openButton, saveButton, exportButton, stemsButton;
+    ParamSlider tempo { "TEMPO" }, swing { "SWING" };
+    juce::ComboBox skinBox;
+    juce::Label patternLabel, songLabel, chainLabel;
+    std::array<std::unique_ptr<PatternButton>, drumbox::numPatterns> patternButtons;
+    juce::TextButton copyButton, pasteButton, clearButton, swapButton;
+    SequenceView sequence;
+    ChainStrip chainStrip;
+    juce::Viewport chainViewport;
+    ParamSlider chainLength { "LENGTH" };
+    DetailPanel detail;
+
     std::unique_ptr<juce::FileChooser> chooser;
     std::unique_ptr<juce::Thread> exportThread;
 
-    juce::Rectangle<int> panel;
-    juce::Rectangle<int> presetBar;
-    int shownStep = -1;
-    int shownChainPosition = -1;
+    juce::Rectangle<int> transportBar;
+
+    JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MainComponent)
 };

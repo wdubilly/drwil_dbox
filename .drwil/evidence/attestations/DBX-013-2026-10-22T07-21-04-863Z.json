@@ -1,0 +1,15 @@
+{
+  "version": 2,
+  "contract": "DBX-013",
+  "status": "ATTESTED",
+  "attestedAt": "2026-10-22T07:21:04.863Z",
+  "actor": {
+    "name": "Wilfried Dubilly",
+    "source": "git config user.name, declarative"
+  },
+  "note": null,
+  "fingerprint": "8a45ddd56e7ddc2f310b25ba9f3a6ff0c4430371b40524b94f34a39204b68d94",
+  "proof": {},
+  "commit": "e28185df9dff01c39597ca155325fd28b8632afc",
+  "automated": []
+}
