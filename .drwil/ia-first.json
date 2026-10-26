@@ -308,5 +308,14 @@
   "ciFiles": [
     ".github/workflows/ia-first.yml"
   ],
-  "mode": "full"
+  "mode": "full",
+  "guarantees": {
+    "enforced": true,
+    "layers": {},
+    "protection": {
+      "forge": "github",
+      "branch": "main",
+      "verifiedAt": "2026-10-26"
+    }
+  }
 }
