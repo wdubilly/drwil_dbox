@@ -1,7 +1,7 @@
 # Closing proof — couverture-root
 
 **Closed on**: 2026-10-26
-**Verified commit**: `bf9b1770aa` — `drwil verify` verdict: PASS
+**Verified commit**: `2182920762` — `drwil verify` verdict: PASS
 
 criteria of this workstream, and what still proves them today (replayed by `drwil verify` after the closing):
 
