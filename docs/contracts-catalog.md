@@ -30,7 +30,6 @@ model of the lines below.
 | catalog:QUA-008 | A type suppression (`as any`, `# type: ignore`, `@ts-ignore`…) is accompanied by a comment justifying the reason, not just the suppression itself. | project source code | lint script requiring an adjacent comment for every known suppression form in the stack |
 | catalog:QUA-009 | A disabled test (`skip`, `xit`, `@Disabled`…) explicitly cites the ID of an open brief in `docs/projects/` justifying the disabling (QUA-019 applied to tests). | project source code, `docs/projects/` | script listing disabled tests with no adjacent brief citation |
 | catalog:QUA-014 | Text/background contrast per RGAA 4.1 / WCAG AA (4.5:1, 3:1 for large text), light and dark. | front-end screens | `.githooks/check-colors.mjs` (to create), `.githooks/check-contrast.mjs` (to create) — copied from `templates/common/optional/front-quality/` in the kit package, see its README |
-| catalog:QUA-020 | The project's critical paths are covered by an automated end-to-end test, replayed in CI. Mandatory guarantee at adoption, for every project: `npx drwil guarantees` writes a blocking brief asking the requester to name the critical paths, closed only once an `e2e` check replays the test. | the project's critical paths | e2e test (e.g. Playwright, Cypress) per path, dedicated CI job |
 
 `catalog:QUA-004` and `catalog:QUA-020` are both mandatory guarantees,
 wired by `npx drwil guarantees` once the stack is known: a **new project**

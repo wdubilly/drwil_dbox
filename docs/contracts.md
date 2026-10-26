@@ -107,6 +107,15 @@ contracts » section).
 **Reason** : bypassing a check silently hides a regression, the opposite of QUA-013
 **Manual** : a bypass rarely leaves a machine-checkable trace.
 
+## QUA-020 — The critical path is covered by an end-to-end test
+**Rule** : The critical path of the product — open a song file, play it, export the WAV mix — is covered by an automated end-to-end test on the engine, replayed by the `e2e` check at every commit and in CI. The interface (JUCE) is not covered by it.
+**Scope** : the drum box engine (`drumbox/Source`)
+**Source of truth** : `drumbox/tests/EngineTests.cpp`
+**Proof** : the test named `QUA-020 …`, run by the check `e2e` (`.drwil/ia-first.json`), hook + `drwil verify`
+**Reason** : unit tests can pass while the chain from a file to the audio and the export is broken
+**Check** : `e2e`
+**Tests** : `drumbox/tests/EngineTests.cpp`
+
 ## QUA-029 — A contract's cited tests exist and carry its ID
 **Rule** : Every file cited by the **Tests** field of a contract exists and contains the contract's ID (cited in the name of the test that protects it). Stack-agnostic: test names are not parsed. Blocking if the project enforces recent requirements (`newRequirements`: `blocking`, default of fresh installs), warning otherwise.
 **Scope** : the **Tests** field of this registry
