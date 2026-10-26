@@ -128,6 +128,6 @@ export function briefReferenceProblems(root, cfg = {}, lang = "fr") {
 
 // Run from the command line (not imported by a test): real paths compared, otherwise a
 // symlinked .githooks/ would make the check pass without verifying anything.
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   process.exitCode = check(process.argv[2] ?? ".", rules, language());
 }

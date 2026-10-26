@@ -3,7 +3,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
-import { readBlock } from "./scope.mjs";
+import { fnmatch, readBlock, withMirrors } from "./scope.mjs";
 
 export const BRIEF_DIRS = ["docs/projects/"];
 export const MODEL_RE = /^modele-|^model-/;
@@ -37,6 +37,15 @@ export function briefStatus(text) {
   if (/^(?:terminé\s+le|done\s+on)\s+\d{4}-\d{2}-\d{2}\b/i.test(status)) return "done";
   if (/^(?:référence|reference)\b/i.test(status)) return "reference";
   return "open";
+}
+
+// Mandatory guarantee not held (`drwil guarantees`, QUA-088): while such a brief exists, it is the
+// only one offered at start.
+const GUARANTEE_LINE_RE = /^\*\*(?:Garantie|Guarantee)\*\*\s*:\s*(?:bloquante|blocking)\b/m;
+
+/** Is this brief a blocking guarantee brief (header line `**Guarantee**: blocking`)? */
+export function blockingGuarantee(text) {
+  return GUARANTEE_LINE_RE.test(text.split(/\r?\n/).slice(0, 15).join("\n"));
 }
 
 const MATURITY_LINE_RE = /^\*\*(?:Maturité|Maturity)\*\*\s*:\s*(.*)$/;
@@ -105,6 +114,36 @@ export function hasIncrements(text) {
 export function queueable(root, brief) {
   const b = scopedBriefs(root).find((x) => x.path === brief);
   return Boolean(b?.ready && b.maturity === "ready" && acceptanceCriteria(readFileSync(join(root, brief), "utf8")).length);
+}
+
+const wildcardAt = (p) => [...p].findIndex((c) => c === "*" || c === "?");
+
+// Can one path match both patterns? Exact for a literal, conservative (shared prefix) for two globs.
+function patternsMeet(a, b) {
+  const [ia, ib] = [wildcardAt(a), wildcardAt(b)];
+  if (ia === -1 && ib === -1) return a === b;
+  if (ia === -1) return fnmatch(a, b);
+  if (ib === -1) return fnmatch(b, a);
+  const [pa, pb] = [a.slice(0, ia), b.slice(0, ib)];
+  return pa.startsWith(pb) || pb.startsWith(pa);
+}
+
+/**
+ * First pair of `scope` patterns (committed in HEAD, installed copies included) that two briefs
+ * share: `{ a, b }`, or null. Two workstreams in parallel on such files would meet at the merge.
+ * The workstreams' index and journal do not count: nearly every brief declares them for its closing,
+ * and their closing conflict is resolved by the workstream's subagent (QUA-148).
+ */
+export function scopesOverlap(root, briefA, briefB) {
+  const dirs = config(root).dirs ?? {};
+  const closing = new Set([dirs.index ?? DEFAULT_INDEX[0], `${dirs.projects ?? "docs/projects"}/journal.md`]);
+  const patterns = (brief) => {
+    const r = spawnSync("git", ["show", `HEAD:${brief}`], { cwd: root, encoding: "utf8" });
+    return r.status === 0 ? withMirrors(readBlock(r.stdout).patterns, config(root)).filter((p) => !closing.has(p)) : [];
+  };
+  const [pa, pb] = [patterns(briefA), patterns(briefB)];
+  for (const a of pa) for (const b of pb) if (patternsMeet(a, b)) return { a, b };
+  return null;
 }
 
 /**
@@ -190,7 +229,8 @@ export function readyGaps(text) {
  * finished, whose `scope` block exists in HEAD — the validated scope is the committed one,
  * as for the scope gate. `[{ path, title, priority, decisions, ready, maturity }]`: ready ones first (no
  * open decision), then by maturity ("ready", then "in-progress" and "unset", "refine" last), then by
- * index priority, then by path. A "refine" brief is listed, never hidden.
+ * index priority, then by path. A "refine" brief is listed, never hidden. While a blocking guarantee
+ * brief exists (QUA-088), only those are listed.
  */
 export function scopedBriefs(root) {
   const priorities = indexPriorities(root);
@@ -214,10 +254,12 @@ export function scopedBriefs(root) {
         decisions,
         ready: decisions === 0,
         maturity: briefMaturity(r.stdout),
+        guarantee: blockingGuarantee(r.stdout),
       });
     }
   }
-  return briefs.sort(
+  const guarantees = briefs.filter((b) => b.guarantee);
+  return (guarantees.length ? guarantees : briefs).sort(
     (a, b) =>
       Number(b.ready) - Number(a.ready) ||
       MATURITY_RANK[a.maturity] - MATURITY_RANK[b.maturity] ||
@@ -235,8 +277,11 @@ export function briefIntent(text) {
   return INTENT_FIELD.exec(text)?.[1] ?? null;
 }
 
-/** Files the branch changed since its merge base with the main branch (DRWIL_BASE, origin/HEAD, then the usual names); [] without a base. */
-function branchFiles(root) {
+/**
+ * Files the branch changed since its merge base with the main branch (DRWIL_BASE, origin/HEAD, then the
+ * usual names), only those of a git `--diff-filter` (e.g. "A", added) if given; [] without a base.
+ */
+export function branchFiles(root, filter) {
   const git = (...args) => {
     const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     return r.status === 0 ? r.stdout.trim() : "";
@@ -252,7 +297,10 @@ function branchFiles(root) {
   for (const ref of refs) {
     if (!ref || !git("rev-parse", "--verify", "--quiet", `${ref}^{commit}`)) continue;
     const base = git("merge-base", "HEAD", ref);
-    if (base) return git("diff", "--name-only", "--no-renames", `${base}..HEAD`).split("\n").filter(Boolean);
+    if (base)
+      return git("diff", "--name-only", "--no-renames", ...(filter ? [`--diff-filter=${filter}`] : []), `${base}..HEAD`)
+        .split("\n")
+        .filter(Boolean);
   }
   return [];
 }

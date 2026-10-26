@@ -7,8 +7,8 @@
 // - `resume` (once the detour's PR is merged, by squash too: `branchMerged` in close.mjs): back to the
 //   workstream's branch, rebased on the fixed main branch, the work restored, the state pointed back at the workstream's brief; refused without
 //   losing anything if any step fails.
-// - `allow` (human, interactive terminal): the yes a detour that changes the rules needs; until then
-//   the scope gate refuses its commits touching them (`rulesFiles`).
+// - `allow` (human, interactive terminal): the yes a detour, or a reopened workstream's fix (QUA-117),
+//   that changes the rules needs; until then the scope gate refuses its commits touching them (`rulesFiles`).
 // It never commits, pushes nor opens the PR; the state is written by `setDetour` (state.mjs) only.
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, realpathSync, writeFileSync } from "node:fs";
@@ -18,7 +18,7 @@ import { BRIEF_DIRS, config } from "./briefs.mjs";
 import { branchMerged, mainBranch, mergedPullRequests, noGhText } from "./close.mjs";
 import { minimumLevel, SENSITIVE_PATHS } from "./risk.mjs";
 import { fnmatch, normalize } from "./scope.mjs";
-import { readState, setDetour, stateRoot } from "./state.mjs";
+import { readState, setDetour, stateRoot, writeState } from "./state.mjs";
 import { fill } from "./state-texts.mjs";
 
 // What changes the rules besides the contracts registry: hooks (the gate among them), thresholds and
@@ -66,6 +66,8 @@ const TEXTS = {
     confirm: "Le détour {0} change les règles du jeu. L'autoriser ? Retapez DETOUR : ",
     refused: "oui non donné : rien n'a changé",
     allowed: "détour {0} autorisé à changer les règles du jeu",
+    reopenConfirm: "Le correctif de la réouverture de {0} change les règles du jeu. L'autoriser ? Retapez DETOUR : ",
+    reopenAllowed: "réouverture de {0} autorisée à changer les règles du jeu",
     // {0} title, {1} workstream brief, {2} branch, {3} date, {4} risk, {5} scope lines.
     brief: `# Détour : {0} (détour de {1})
 
@@ -135,6 +137,8 @@ files:
     confirm: "Detour {0} changes the rules. Allow it? Type DETOUR: ",
     refused: "yes not given: nothing changed",
     allowed: "detour {0} allowed to change the rules",
+    reopenConfirm: "The fix of the reopening of {0} changes the rules. Allow it? Type DETOUR: ",
+    reopenAllowed: "reopening of {0} allowed to change the rules",
     brief: `# Detour: {0} (detour of {1})
 
 **Status**: opened on {3} (detour of {1}, branch {2}).
@@ -319,15 +323,21 @@ export function resume(root, { now = new Date().toISOString(), gh } = {}) {
   return done([fill(T.resumed, d.origin_brief, d.origin_branch, base), ...(pushed ? [T.forcePush] : [])].join("\n"));
 }
 
-/** The human's yes for a detour that changes the rules; `confirm(question)` only in an interactive terminal. */
+/**
+ * The human's yes for a detour, or a reopened workstream's fix (QUA-117), that changes the rules;
+ * `confirm(question)` only in an interactive terminal.
+ */
 export async function allow(root, { tty = false, confirm } = {}) {
   const T = texts(root);
   const { state } = readState(root);
-  if (!state.detour) return refused(T.noDetour);
+  const reopened = !state.detour && state.reopened;
+  if (!state.detour && !reopened) return refused(T.noDetour);
   if (!tty || typeof confirm !== "function") return refused(T.human);
-  if (!(await confirm(fill(T.confirm, state.detour.branch)))) return refused(T.refused);
-  setDetour(root, state.active_brief, { ...state.detour, human: true });
-  return done(fill(T.allowed, state.detour.branch));
+  const name = reopened ? state.active_brief : state.detour.branch;
+  if (!(await confirm(fill(reopened ? T.reopenConfirm : T.confirm, name)))) return refused(T.refused);
+  if (reopened) writeState(root, { ...state, reopened: { ...state.reopened, human: true } });
+  else setDetour(root, state.active_brief, { ...state.detour, human: true });
+  return done(fill(reopened ? T.reopenAllowed : T.allowed, name));
 }
 
 /** Value of the `--name value` option in `args`, or undefined. */

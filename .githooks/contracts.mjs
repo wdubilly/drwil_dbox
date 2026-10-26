@@ -9,6 +9,8 @@
 // between backticks) and `**Manual**` (the part of the proof that stays human).
 // `**Tests**`: the test files that protect the contract, between backticks (checked by
 // .githooks/check-contract-tests.mjs: each exists and carries the contract's ID).
+// `**Covers**` (`**Couvre**`): the path patterns between backticks of what the contract judges; an
+// attestation falls when a file under them changes (see docs/ia-first.md, validity rule).
 // A check's command never lives here.
 
 /** Identifiers of the steps of .githooks/run-checks.mjs. The first four are also those of BASE in check-control-coverage.mjs. */
@@ -29,6 +31,7 @@ const MANUAL_FIELD = /^(manuel|manual)$/i;
 const RULE_FIELD = /^(règle|regle|rule)$/i;
 const SEVERITY_FIELD = /^(sévérité|severite|severity)$/i;
 const TESTS_FIELD = /^tests$/i;
+const COVERS_FIELD = /^(couvre|couverture|covers)$/i;
 
 // Only blocking contracts decide the gate of `drwil verify`; the others are run and shown
 // without changing the exit code. Default: blocking (P0 behaviour). A registry is written in its
@@ -59,7 +62,7 @@ function cells(line) {
 }
 
 /**
- * Contracts of the text, in order: { id, title, line, form, rule, checks, manual, tests, severity, text }.
+ * Contracts of the text, in order: { id, title, line, form, rule, checks, manual, tests, covers, severity, text }.
  * `text`: the raw section (or table row), base of an attestation's fingerprint.
  * Chain intent → requirement → proof: **Reason** (human intent), **Rule** (explicit requirement),
  * **Check** or **Manual** (proof). Missing field: null.
@@ -82,6 +85,7 @@ export function readContracts(text) {
         checks: null,
         manual: null,
         tests: null,
+        covers: null,
         severity: "blocking",
         rawSeverity: null,
         text: line,
@@ -110,6 +114,7 @@ export function readContracts(text) {
       else if (MANUAL_FIELD.test(name)) current.manual = value;
       else if (RULE_FIELD.test(name)) current.rule = value;
       else if (TESTS_FIELD.test(name)) current.tests = identifiers(value);
+      else if (COVERS_FIELD.test(name)) current.covers = identifiers(value);
       else if (SEVERITY_FIELD.test(name)) {
         current.rawSeverity = value.replace(/`/g, "").trim();
         current.severity = SEVERITIES[current.rawSeverity.toLowerCase()] ?? null;
@@ -139,6 +144,7 @@ export function readContracts(text) {
       checks: iCheck >= 0 && c[iCheck] && c[iCheck] !== "—" ? identifiers(c[iCheck]) : null,
       manual: iManual >= 0 && c[iManual] && c[iManual] !== "—" ? c[iManual] : null,
       tests: null,
+      covers: null,
       severity: "blocking",
       rawSeverity: null,
       text: line,

@@ -12,14 +12,14 @@
 // Closing (VERIFY → CLOSING) requires the evidence of `drwil verify --evidence`: this
 // file reads it, it runs no check (a single engine, .githooks/engine.mjs).
 import { spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, writeFileSync } from "node:fs";
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 import { BRIEF_DIRS, briefStatus, config, missingCriteria, MODEL_RE, queueable, scopedBriefs } from "./briefs.mjs";
 import { closingMerged, closingSignals, noGhText, pruneMergedBranches, prunedMessage } from "./close.mjs";
-import { main, readStdinJson } from "./state-cli.mjs";
-import { fill, shortReminder, STATE_MESSAGES } from "./state-texts.mjs";
+import { activeElsewhere } from "./worktree.mjs";
+import { main, readStdinJson, reminderIfChanged, reopen } from "./state-cli.mjs";
+import { fill, STATE_MESSAGES } from "./state-texts.mjs";
 
 // Unchanged interface for the other hooks, the CLI and the tools: everything this file exported
 // before it was split stays importable from here.
@@ -36,7 +36,7 @@ export {
 export { context, governanceDisabled, shortReminder } from "./state-texts.mjs";
 // The command line lives in state-cli.mjs (QUA-001: files under 400 lines); `node .githooks/state.mjs`
 // stays the entry point.
-export { main, readStdinJson };
+export { main, readStdinJson, reminderIfChanged, reopen };
 
 export const ACTIVITIES = ["SCOPING", "EXPECTATION", "REQUEST", "BUILD", "EVIDENCE", "VERIFY", "CLOSING"];
 
@@ -56,8 +56,10 @@ export const NEUTRAL_STATE = Object.freeze({ version: 1, activity: "SCOPING", ac
 
 // auto_merge: absent from the neutral state, set only by a human start (`start`).
 // queue, queue_merge (QUA-037): the briefs a human queued at start, run next without a new gesture.
+// parallel (QUA-147): the briefs a human launched at once, each in its own worktree, recorded by the main folder.
 // detour (QUA-050): the workstream set aside while a prior defect is fixed (.githooks/detour.mjs).
-const FIELDS = new Set([...Object.keys(NEUTRAL_STATE), "auto_merge", "queue", "queue_merge", "detour"]);
+// reopened (QUA-116): the workstream reopened after its closing, `{ pr, human? }`, until back in SCOPING.
+const FIELDS = new Set([...Object.keys(NEUTRAL_STATE), "auto_merge", "queue", "queue_merge", "detour", "reopened", "parallel"]);
 const ISO_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/;
 const texts = (root) => STATE_MESSAGES[config(root).lang === "en" ? "en" : "fr"];
 
@@ -84,6 +86,10 @@ export function validateState(state, root) {
   if (state.active_brief !== null && state.active_brief !== undefined)
     problems.push(...validateBrief(state.active_brief, root, state.activity === "CLOSING" || state.detour !== undefined, T));
   if (state.detour !== undefined) problems.push(...validateDetour(state.detour, state.activity, root, T));
+  const r = state.reopened;
+  if (r !== undefined && !(r && typeof r === "object" && Number.isInteger(r.pr) && [undefined, true, false].includes(r.human)))
+    problems.push(T.reopenedType);
+  else if (r !== undefined && !["BUILD", "EVIDENCE", "VERIFY", "CLOSING"].includes(state.activity)) problems.push(T.reopenedActivity);
   if (state.active_request !== null && typeof state.active_request !== "string") problems.push(T.request);
   if (state.auto_merge !== undefined && typeof state.auto_merge !== "boolean") problems.push(T.autoMergeType);
   else if (state.auto_merge === true && state.activity === "SCOPING") problems.push(T.autoMergeScoping);
@@ -91,6 +97,8 @@ export function validateState(state, root) {
     if (!Array.isArray(state.queue) || state.queue.some((b) => typeof b !== "string")) problems.push(T.queueType);
     else for (const b of state.queue) problems.push(...validateBrief(b, root, false, T));
   }
+  if (state.parallel !== undefined && (!Array.isArray(state.parallel) || state.parallel.some((b) => typeof b !== "string")))
+    problems.push(T.parallelType);
   if (state.queue_merge !== undefined && typeof state.queue_merge !== "boolean") problems.push(T.queueMergeType);
   if (state.since !== null && !(typeof state.since === "string" && ISO_RE.test(state.since) && !Number.isNaN(Date.parse(state.since)))) {
     problems.push(T.since);
@@ -150,13 +158,11 @@ export function requiresHuman(from, to, mode) {
 }
 
 /**
- * Latest verify evidence (.drwil/evidence/verify-*.json, outside git): `{ ok: true }`
- * if it allows closing, otherwise `{ ok: false, reason }` (`code` "noEvidence" or "otherCommit" when it is to be renewed). Verdict pass or attested,
- * on the HEAD commit, clean worktree at verify time and now: otherwise, what is
- * closed would not be what was verified.
+ * Latest verify evidence (.drwil/evidence/verify-*.json, outside git): `{ name, data }`, `data` null
+ * when the file is unreadable; null without any evidence. Read here alone: the closing's proof file
+ * reads the same one (QUA-084).
  */
-export function verifyEvidence(root) {
-  const T = texts(root);
+export function latestEvidence(root) {
   const dir = join(root, ".drwil", "evidence");
   // ISO timestamp in the name: alphabetical order is chronological order.
   const names = existsSync(dir)
@@ -164,14 +170,27 @@ export function verifyEvidence(root) {
         .filter((n) => /^verify-.+\.json$/.test(n))
         .sort()
     : [];
-  if (!names.length) return { ok: false, code: "noEvidence", reason: T.noEvidence };
   const name = names.at(-1);
-  let ev;
+  if (!name) return null;
   try {
-    ev = JSON.parse(readFileSync(join(dir, name), "utf8"));
+    return { name, data: JSON.parse(readFileSync(join(dir, name), "utf8")) };
   } catch {
-    return { ok: false, reason: fill(T.evidenceUnreadable, name) };
+    return { name, data: null };
   }
+}
+
+/**
+ * What the latest evidence says about closing: `{ ok: true }` if it allows it, otherwise
+ * `{ ok: false, reason }` (`code` "noEvidence" or "otherCommit" when it is to be renewed). Verdict
+ * pass or attested, on the HEAD commit, clean worktree at verify time and now: otherwise, what is
+ * closed would not be what was verified.
+ */
+export function verifyEvidence(root) {
+  const T = texts(root);
+  const last = latestEvidence(root);
+  if (!last) return { ok: false, code: "noEvidence", reason: T.noEvidence };
+  const { name, data: ev } = last;
+  if (!ev) return { ok: false, reason: fill(T.evidenceUnreadable, name) };
   const git = (...args) => {
     const r = spawnSync("git", args, { cwd: root, encoding: "utf8" });
     return r.status === 0 ? r.stdout.trim() : null;
@@ -229,6 +248,8 @@ export function start(root, brief, { human = false, request, autoMerge = false, 
   const queued = rest.length || fromQueue ? [path, ...rest] : [];
   const notReady = queued.find((b) => !queueable(root, b));
   if (notReady) return { code: 1, message: fill(T.queueNotReady, notReady) };
+  const elsewhere = activeElsewhere(root, path);
+  if (elsewhere) return { code: 1, message: fill(T.startBusy, path, elsewhere) };
   const missing = missingCriteria(root, path);
   if (missing === "blocking") return { code: 1, message: fill(T.startNoCriteria, path) };
   const state = { version: 1, activity: "BUILD", active_brief: path, active_request: request ?? null, since: now };
@@ -237,8 +258,7 @@ export function start(root, brief, { human = false, request, autoMerge = false, 
   if (rest.length) Object.assign(state, { queue: rest, queue_merge: human ? autoMerge === true : read.state.queue_merge === true });
   const problems = validateState(state, root);
   if (problems.length) return { code: 1, message: fill(T.startInvalid, problems.join(" ; ")) };
-  mkdirSync(join(root, ".drwil"), { recursive: true });
-  writeFileSync(join(root, ".drwil", "state.json"), JSON.stringify(state, null, 2) + "\n");
+  writeState(root, state);
   const warned = missing ? `\n${fill(T.noCriteria, path)}` : "";
   const next = rest.length ? `\n${fill(T.queued, rest.join(", "))}` : "";
   // The previous workstreams' branches, merged, are no longer needed (QUA-048).
@@ -320,8 +340,7 @@ export async function move(root, { to, brief, request }, { tty = false, confirm,
     if (!tty || typeof confirm !== "function") return { code: 1, message: resumed + fill(T.humanDecision, from, to) };
     if (!(await confirm(fill(T.confirm, from, to)))) return { code: 1, message: T.confirmRefused };
   }
-  mkdirSync(join(root, ".drwil"), { recursive: true });
-  writeFileSync(join(root, ".drwil", "state.json"), JSON.stringify(prep.state, null, 2) + "\n");
+  writeState(root, prep.state);
   return { code: 0, message: `${resumed}${from} → ${to}${warning}` };
 }
 
@@ -333,7 +352,7 @@ export function stopQueue(root) {
   const state = { ...read.state };
   delete state.queue;
   delete state.queue_merge;
-  writeFileSync(join(root, ".drwil", "state.json"), JSON.stringify(state, null, 2) + "\n");
+  writeState(root, state);
   return { code: 0, message: fill(T.queueStopped, read.state.queue.join(", ")) };
 }
 
@@ -345,30 +364,20 @@ export function setDetour(root, brief, detour, now = new Date().toISOString()) {
   const state = { ...readState(root).state, active_brief: brief, since: now };
   if (detour) state.detour = detour;
   else delete state.detour;
-  const problems = validateState(state, root);
-  if (problems.length) throw new Error(problems.join(" ; "));
-  writeFileSync(join(root, ".drwil", "state.json"), JSON.stringify(state, null, 2) + "\n");
+  writeState(root, state);
 }
 
-const REMINDER_FILE = [".drwil", "reminder.json"];
+/** Records in this folder's state the briefs launched in parallel (QUA-147), the rest of the state unchanged. */
+export function recordParallel(root, briefs) {
+  writeState(root, { ...readState(root).state, parallel: briefs });
+}
 
-/**
- * The reminder only if it changed since the last one injected (fingerprint in .drwil/reminder.json,
- * local like the state); null otherwise. Missing or unreadable fingerprint: the reminder is injected.
- */
-export function reminderIfChanged(root) {
-  const text = shortReminder(readState(root), root);
-  if (text === null) return null;
-  const fingerprint = createHash("sha256").update(text).digest("hex");
-  const file = join(root, ...REMINDER_FILE);
-  try {
-    if (JSON.parse(readFileSync(file, "utf8")).fingerprint === fingerprint) return null;
-  } catch {}
-  try {
-    mkdirSync(join(root, ".drwil"), { recursive: true });
-    writeFileSync(file, JSON.stringify({ fingerprint }) + "\n");
-  } catch {}
-  return text;
+/** Writes `state` to .drwil/state.json, the only place that does; an invalid state is a bug of the caller: it throws. */
+export function writeState(root, state) {
+  const problems = validateState(state, root);
+  if (problems.length) throw new Error(problems.join(" ; "));
+  mkdirSync(join(root, ".drwil"), { recursive: true });
+  writeFileSync(join(root, ".drwil", "state.json"), JSON.stringify(state, null, 2) + "\n");
 }
 
 /**

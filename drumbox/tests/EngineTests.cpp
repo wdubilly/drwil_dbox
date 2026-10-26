@@ -2759,6 +2759,32 @@ TEST ("DBX-035 the demo song replaces what was there and keeps playing state", {
         CHECK (e.getSong().copyPattern (p).cells == fresh.getSong().copyPattern (p).cells);
 })
 
+TEST ("QUA-020 critical path: open a song file, play it, export the WAV mix", {
+    const std::string folder = "qua020_out";
+    std::filesystem::remove_all (folder);
+    std::filesystem::create_directories (folder);
+
+    DrumEngine source;
+    loadDemoSong (source);
+    CHECK (saveSongFile (source, folder + "/song.dbox"));
+
+    DrumEngine e;
+    e.prepare (sampleRate);
+    CHECK (loadSongFile (e, folder + "/song.dbox"));
+    CHECK (serializeSong (e) == serializeSong (source));
+
+    e.setPlaying (true);
+    CHECK (peak (renderEngine (e, 44100)) > 0.05f);
+    CHECK (e.getCurrentStep() >= 0);
+    e.setPlaying (false);
+
+    CHECK (exportMixWav (e, folder + "/mix.wav"));
+    const WavFile wav = readWav (folder + "/mix.wav");
+    CHECK (wav.ok && wav.channels == 2 && wav.frames > 0);
+    CHECK (peak (wav.left) > 0.05f);
+    std::filesystem::remove_all (folder);
+})
+
 int main (int argc, char** argv)
 {
     const std::string prefix = argc > 1 ? argv[1] : "";

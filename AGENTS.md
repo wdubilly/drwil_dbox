@@ -7,7 +7,10 @@ must stay readable by any tool.
 
 ## The project in 5 lines
 
-drwil_dbox — (to describe: what the application does, for whom)
+drwil_dbox — Drum Box: a standalone retro drum machine and groove box (C++17, JUCE 8) for
+musicians: 16-step sequencer, twelve synthesised tracks (drums, bass, synth, pluck, FX), a
+pattern chain, a mixer with effects, `.dbox` song files and WAV export. Linux first,
+Windows next. Details: `docs/features.md`.
 Full map and stack: `docs/architecture.md`. A new project fills these five
 lines in when it is scoped (`docs/recipes/adopt-the-kit.md`, step 0).
 
@@ -93,6 +96,16 @@ lines in when it is scoped (`docs/recipes/adopt-the-kit.md`, step 0).
   (an existing contract modified or removed, hooks, thresholds, the gate)
   waits for the human's yes; adding a new contract does not
   (`docs/recipes/corriger-un-defaut.md`).
+- **Defect revealed after the closing**: in CLOSING, when the workstream's
+  PR, open and not merged yet, reveals a defect (red CI, forge analysis),
+  the agent reopens the workstream alone with `node .githooks/state.mjs
+  reopen`: the automatic merge is cancelled first, the brief comes back as
+  it was before the closing commit (a commit of its own), BUILD again on the
+  same branch — no history rewritten, no force push. The fix follows the
+  detour's rule: one that changes the rules waits for the human's yes. The
+  new closing updates the workstream's journal entry (never a second one)
+  and rewrites the proof; a defect found after the merge is a new
+  workstream.
 - **Queue of workstreams**: when the human ticked several briefs at start,
   the agent runs them one after the other without a new poll — with Claude
   Code, each one in a subagent (fresh context), the main session keeping
@@ -100,6 +113,28 @@ lines in when it is scoped (`docs/recipes/adopt-the-kit.md`, step 0).
   merged (followed with `gh`, 30 minutes at most), and stop at the first
   one that needs a human (attestation, unfixed FAIL, red CI, decision). A
   queue resumed in a new session waits for the human's explicit yes.
+- **One session per workstream**: once a closing is done and the state is
+  back in SCOPING, the next workstream starts in a new session (Claude
+  Code: `/clear`; another tool: a new conversation): a fresh context does
+  not read the closed workstream again. A queue keeps its subagent per
+  workstream.
+- **Documentation-only PR**: a PR that touches only documentation
+  (Markdown files, `docs/`) is put in automatic merge by the agent
+  (`gh pr merge --auto --merge`) without asking the `drwil-merge` question;
+  the poll keeps that question for PRs that touch code. The repository must
+  allow auto-merge, otherwise say « auto-merge not allowed by the
+  repository » and leave the merge to the human.
+- **Follow the CI of a PR**: after a push or creating a PR, run
+  `node .githooks/pr-watch.mjs [<number>]`: it waits for the end of the CI
+  and says « green », « merged » or « red » with the failing check. A red
+  CI is fixed at its cause, never bypassed (QUA-019); without `gh`
+  reachable, the follow-up is « not run », never « green » (QUA-013).
+- **Mandatory guarantees**: once the stack is known (`/drwil-adopt`),
+  `npx drwil guarantees` wires 100 % test coverage per layer and requires
+  an e2e test of the critical paths, a protected forge with a CI and a
+  written presentation of the product; each one not held gets a blocking
+  `[P0]` brief, offered alone at start, and `drwil verify` stays FAIL until
+  it is held. No waiver: only a declared and justified exclusion.
 - **Readable references**: an identifier cited to a human — contract ID
   (`QUA-015`), catalog line (`catalog:QUA-004`), lot or point of a brief —
   is always followed by what it designates: « QUA-015 (projects resumable
@@ -120,8 +155,16 @@ lines in when it is scoped (`docs/recipes/adopt-the-kit.md`, step 0).
 `docs/contracts.md` is the **single source** of invariants (ID
 `SEC,QUA`-xxx): rule, scope, source of truth, proof. Do not
 copy them elsewhere: cite the ID. Before a significant change, identify the
-applicable contracts and recipe. A failing check flags a contract: read
-that contract before bypassing anything. Always installed baseline:
+applicable contracts and recipe: `node .githooks/glossary.mjs --contracts`
+lists every contract (ID and title, none left out) in one short read, then
+`node .githooks/glossary.mjs --contract <ID>` gives the full text of each
+applicable one. Never read the whole registry: a file read stays in the
+context and is read again at every request; with Claude Code, reading the
+registry or the journal whole (without a range) is refused, go through
+`node .githooks/glossary.mjs` (a read by range stays allowed, to edit). A failing check flags a
+contract: read that contract before bypassing anything. A past workstream:
+`node .githooks/glossary.mjs --journal <brief>` gives its journal entry,
+not the whole journal. Always installed baseline:
 QUA-011 (docs), QUA-013 (a check that did not run is not a passed check),
 QUA-015 (cold-readable projects), QUA-016 (scoping reminder, configurable
 severity), QUA-017 (no direct work on the main branch), QUA-019 (no
@@ -134,20 +177,21 @@ project completes the list of contracts to know regardless of the task.
 2. The file of the layer you touch (if any): read that folder's
    `AGENTS.md` (several if the task spans layers).
 3. The recipe or document listed below.
-4. `docs/contracts.md` for the details of an ID, or when a check fails.
+4. A contract's details, or when a check fails: `node .githooks/glossary.mjs
+   --contract <ID>` (its full text), never the whole `docs/contracts.md`.
 5. Nothing else without a reason: no reading all of `docs/` end to end.
 
 | If you touch… | Read first | Recipe |
 |---|---|---|
 | an API route | `backend/AGENTS.md` (if present) | `docs/recipes/add-an-api-route.md` |
 | a screen | `frontend/AGENTS.md` (if present) | `docs/recipes/add-a-frontend-screen.md` |
-| a large existing file | `docs/contracts.md` | `docs/recipes/refactor-without-breaking.md` |
-| a defect to fix | `docs/contracts.md` | `docs/recipes/corriger-un-defaut.md` |
+| a large existing file | `node .githooks/glossary.mjs --contracts` | `docs/recipes/refactor-without-breaking.md` |
+| a defect to fix | `node .githooks/glossary.mjs --contract <ID>` | `docs/recipes/corriger-un-defaut.md` |
 | adopting the kit on an existing project | `.drwil/ia-first.json`, `docs/contracts-catalog.md` | `docs/recipes/adopt-the-kit.md` |
 | an idea to scope (intent) | `docs/intentions/README.md` | — |
 | a pending project | `docs/projects/pending.md` | — |
 | the repo's organization for an agent (rules, checks, skills) | `docs/ia-first.md` | — |
-| a security rule | `docs/contracts.md` | — |
+| a security rule | `node .githooks/glossary.mjs --contracts` | — |
 | a screen's behavior | `docs/features.md` (if present) | — |
 | running, setting up a workstation | `INSTALL.md` (if present) | `docs/recipes/run-locally.md` (if present) |
 | production, the server | `docs/deployment.md` (if present) | `docs/recipes/deploy-to-production.md`, `docs/recipes/backup-and-restore.md` (if present) |
@@ -171,9 +215,18 @@ their own instructions". Remove otherwise.)*
 
 ## Commands
 
-- Run all checks: `node .githooks/run-checks.mjs`
+- Run all checks: `node .githooks/run-checks.mjs` (shows only the failed
+  checks and a summary line counting the warnings; full detail in
+  `.drwil/evidence/run-checks.log` (if present)).
 - Know whether the work is verified: `npx drwil verify --agent` (only
-  `GOVERNANCE: PASS` counts as validation). `drwil attest` is a **human**
+  `GOVERNANCE: PASS` counts as validation).
+- Long checks in a subagent, if the tool allows it: with Claude Code, the
+  `drwil-checks` subagent (`.claude/agents/drwil-checks.md` (if present)) runs
+  `run-checks` and `drwil verify --agent` and returns only the verdict and
+  the failures, the `GOVERNANCE: …` line and the failing or to-attest
+  contracts copied word for word; the main session says « verified » only
+  on that copied line. Another tool: the same if it allows a subagent
+  without write access, otherwise run them directly. `drwil attest` is a **human**
   action: an agent never runs it and never writes an attestation.
   Likewise, the acceptance verdict on a candidate release
   (`.githooks/release-verdict.mjs` (if present), release module) is a

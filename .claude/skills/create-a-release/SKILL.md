@@ -17,3 +17,7 @@ With an acceptance team, publish a candidate instead
 (`.githooks/release-verdict.mjs` (if present)) is a human gesture an agent never runs, and the
 promotion (`.githooks/promote-release.mjs` (if present), `--dry-run` first) needs the same yes as
 a release.
+Both the promotion and a direct release also open a PR carrying the
+version's acceptance note (`recettes` folder); if it fails, the tag and the
+release stay published — report the catch-up command the script prints
+(`.githooks/recette-note.mjs` (if present)).

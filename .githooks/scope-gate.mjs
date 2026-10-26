@@ -5,16 +5,16 @@
 // - Briefs (docs/projects/, docs/intentions/…) can always be committed.
 // - At commit time, any other file requires the BUILD activity and must be covered by the
 //   scope block of the active brief as it is in HEAD: widening its scope takes a separate
-//   commit, visible on its own.
+//   commit, visible on its own. During a merge, only the resolution is judged (QUA-111).
 // - Elsewhere (pre-push, CI, verify), there is no local state: each commit of the branch is
 //   replayed against the scope of the brief named by its `Drwil-Brief` trailer, read in its
 //   parent. A commit is judged by its parent's rules: without a gate in the parent, it is not
 //   checked.
 // Severity: `scopeGate` setting (off | warning | blocking), warning if missing.
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { resolve } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { contractsAddedOnly, isRegistry, rulesFiles } from "./detour.mjs";
 import { fnmatch, normalize, readBlock, withMirrors } from "./scope.mjs";
 import { governanceDisabled, readState } from "./state.mjs";
@@ -22,14 +22,19 @@ import { governanceDisabled, readState } from "./state.mjs";
 // Attestations pass like briefs: a human proof already guarded by `drwil attest` (terminal
 // required, contract fingerprint), reviewed; subjecting them to the scope would force widening
 // every brief in order to close. The consumption log likewise: its line is written in CLOSING,
-// for the closing commit (`consumption.mjs --record`).
+// for the closing commit (`consumption.mjs --record`). The closing proof likewise (QUA-084): the
+// closing writes it in CLOSING, for the closing commit, and refuses to close without it.
 // The scoping recipes' outputs (value discovery, risk audit — French and English names) are scoping
-// work, written in SCOPING: exact names, never a broad pattern on docs/.
+// work, written in SCOPING: exact names, never a broad pattern on docs/. The release notes
+// likewise (`docs/recettes/`): written by `recette-note.mjs` and committed by git plumbing, with no
+// hook, so no trailer, while no brief is active; reviewed in their pull request.
 export const OUT_OF_SCOPE = [
   "docs/projects/*",
   "docs/intentions/*",
   ".drwil/evidence/attestations/*",
   ".drwil/usage.jsonl",
+  "docs/preuves/*",
+  "docs/recettes/*",
   "docs/value-discovery.md",
   "docs/decouverte-valeur.md",
   "docs/audit-risks.md",
@@ -50,6 +55,8 @@ const TEXTS = {
     failed: (n) => `périmètre de l'attente : ${n} problème(s) (barrière bloquante)`,
     rules: (f) =>
       `${f} : un détour qui change les règles du jeu (contrat existant modifié ou retiré, hook, seuil, barrière, CI) demande le oui de l'humain — \`node .githooks/detour.mjs allow\` dans un terminal ; en file, le sous-agent s'arrête et le signale`,
+    reopenRules: (f) =>
+      `${f} : un correctif de réouverture qui change les règles du jeu (contrat existant modifié ou retiré, hook, seuil, barrière, CI) demande le oui de l'humain — \`node .githooks/detour.mjs allow\` dans un terminal ; en file, le sous-agent s'arrête et le signale`,
   },
   en: {
     activity: (a, n) =>
@@ -61,6 +68,8 @@ const TEXTS = {
     failed: (n) => `brief scope: ${n} problem(s) (blocking gate)`,
     rules: (f) =>
       `${f}: a detour that changes the rules (an existing contract modified or removed, hook, threshold, gate, CI) needs the human's yes — \`node .githooks/detour.mjs allow\` in a terminal; in a queue, the subagent stops and reports it`,
+    reopenRules: (f) =>
+      `${f}: a reopening fix that changes the rules (an existing contract modified or removed, hook, threshold, gate, CI) needs the human's yes — \`node .githooks/detour.mjs allow\` in a terminal; in a queue, the subagent stops and reports it`,
   },
 };
 
@@ -88,13 +97,14 @@ export function checkIndex({ files, state, patterns, outOfScope, cfg, addedOnly 
   if (!subject.length) return [];
   if (state.activity !== "BUILD") return [T.activity(state.activity, subject.length)];
   const problems = subject.filter((f) => !covered(f, patterns)).map((f) => T.outsideScope(f, state.active_brief));
-  // QUA-050: an ordinary detour needs no one, nor does adding a contract; one that changes the rules
-  // (an existing contract modified or removed among them) waits for the human's yes.
-  if (state.detour && state.detour.human !== true)
+  // QUA-050, QUA-117: an ordinary detour or reopening fix needs no one, nor does adding a contract; one
+  // that changes the rules (an existing contract modified or removed among them) waits for the human's yes.
+  const exception = state.detour ?? state.reopened;
+  if (exception && exception.human !== true)
     problems.push(
       ...rulesFiles(subject, cfg)
         .filter((f) => !addedOnly(f))
-        .map(T.rules),
+        .map(state.detour ? T.rules : T.reopenRules),
     );
   return problems;
 }
@@ -148,6 +158,32 @@ function checkBranch(root, base, { outOfScope, cfg }) {
   return problems;
 }
 
+/** `mode sha` of `f` in `rev` (null: the index); "" when absent; null when git fails. */
+function entry(root, rev, f) {
+  const args = rev ? ["ls-tree", "-z", "--full-tree", rev, "--", f] : ["ls-files", "--stage", "-z", "--", f];
+  const out = git(root, ["--literal-pathspecs", ...args]);
+  if (out === null) return null;
+  const line = out.split("\0").find((l) => l.endsWith(`\t${f}`));
+  if (!line) return "";
+  // ls-tree: `mode type sha`; ls-files --stage: `mode sha stage`.
+  const fields = line.split("\t")[0].split(" ");
+  return `${fields[0]} ${fields[rev ? 2 : 1]}`;
+}
+
+/**
+ * QUA-111: during a merge (MERGE_HEAD), only the resolution is the author's: a staged file identical to
+ * one of the two parents (deleted and absent there included) is brought as it is, not judged. A failed
+ * git call keeps the file judged, never lets it pass (QUA-013).
+ */
+function resolution(root, staged) {
+  if (git(root, ["rev-parse", "--verify", "--quiet", "MERGE_HEAD^{commit}"]) === null) return staged;
+  return staged.filter((f) => {
+    const own = entry(root, null, f);
+    if (own === null) return true;
+    return !["HEAD", "MERGE_HEAD"].some((rev) => entry(root, rev, f) === own);
+  });
+}
+
 /**
  * Full check for the engine: `{ status, problems, message?, detail? }`.
  * `staged` (staged files) is only given at pre-commit; otherwise the branch is replayed.
@@ -162,7 +198,7 @@ export function checkScope(root, { cfg = {}, staged = null, env = process.env } 
     // The staged registry against HEAD's: `git show` fails (null) on a registry created or removed — a doubt.
     const addedOnly = (f) => isRegistry(f, cfg) && contractsAddedOnly(git(root, ["show", `HEAD:${f}`]), git(root, ["show", `:${f}`]));
     problems = checkIndex({
-      files: staged,
+      files: resolution(root, staged),
       state,
       patterns: patternsAt(root, "HEAD", state.active_brief, cfg),
       outOfScope,
@@ -200,7 +236,7 @@ export function addTrailer(root, messageFile) {
 
 // `node .githooks/scope-gate.mjs --trailer <file>` (prepare-commit-msg). Never blocks the commit:
 // addTrailer does not throw, a git failure leaves the message as it is.
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const i = process.argv.indexOf("--trailer");
   if (i >= 0 && process.argv[i + 1]) addTrailer(process.cwd(), process.argv[i + 1]);
 }

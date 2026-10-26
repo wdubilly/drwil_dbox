@@ -35,9 +35,38 @@ request, instead of direct commits on the main branch.
   already has this section).
 - Checks (`.githooks/run-checks.mjs`) must be
   green before opening the pull/merge request, not only before merging
-  it.
+  it. Their output shows only the failed checks and a summary line (warnings
+  counted, full detail in `.drwil/evidence/run-checks.log` (if present)); with Claude
+  Code, the `drwil-checks` subagent can run them and return only the verdict
+  and the failures, copied word for word.
 - Before merging: check that the pull/merge request CI status checks
   are green (`gh pr checks <n> --watch` on GitHub).
+
+## One workstream per worktree
+
+To work two workstreams at once, run each one in its own worktree, with its
+own terminal and agent session (the main session and its subagents work in
+that folder only):
+
+- At `/drwil-start`, answer "New worktree" to the `drwil-worktree` question:
+  the folder `../<repository>-<brief>` and its branch `workstream/<brief>`
+  are created from the up-to-date main branch, the install command declared
+  as `worktreeInstall` in `.drwil/ia-first.json` is run there (none declared:
+  the output says to install the dependencies), and the workstream starts
+  there. Open a terminal in that folder and start the agent; the folder you
+  answered from is unchanged.
+- A brief already active in another worktree cannot be started again: the
+  refusal gives that folder's path.
+- The state reminder of each folder says the others are worktrees of the same
+  repository: never modify another folder's files.
+- Expect conflicts at closing on the index (`docs/projects/pending.md`) and
+  on `docs/projects/journal.md`, which every workstream edits: merge the main
+  branch into yours (`node .githooks/close.mjs --check` reports a branch
+  behind it and gives the command) and resolve them by hand before the
+  closing; the closing is not refused for being late.
+- After the merge, clean up by hand, nothing does it for you:
+  `git worktree remove ../<repository>-<brief>`, then `git worktree prune`;
+  the merged branch is deleted at the next start.
 
 ## Closing
 
@@ -57,12 +86,25 @@ request, instead of direct commits on the main branch.
 - If the whole brief is now finished (not just one increment among several of a
   brief that otherwise stays open): summarize the brief into a short entry
   in `docs/projects/journal.md` (date, title, key decisions, closing
-  commit/PR), then run `node .githooks/close.mjs` (in Closing): it deletes
+  commit/PR, and the closing proof of the workstream — the entry cites it),
+  then run `node .githooks/close.mjs` (in Closing): it writes the closing
+  proof (below), deletes
   the brief file, removes the matching item from `docs/projects/pending.md`
   (don't check it: the journal becomes the closing source, the index only
-  lists remaining work) and records the consumption. It stages, commits,
+  lists remaining work; a past entry is read by itself:
+  `node .githooks/glossary.mjs --journal <brief>`, never the whole journal) and records the consumption. It stages, commits,
   pushes and merges nothing. Nothing is lost — the full history stays in
   git (`git log --follow -- docs/projects/<brief>.md`).
+- The closing writes the workstream's proof first, a versioned file in
+  `docs/preuves/` (`dirs.proofs` setting): every acceptance criterion with
+  its contract, that contract's checks, the verified commit and the
+  fingerprint of the files it covers, copied from the latest `drwil verify
+  --evidence` evidence. Without an evidence of the verified commit, with a
+  verdict that does not pass, or if the file cannot be written, the closing
+  is refused and nothing is deleted: renew the evidence (`npx drwil verify
+  --evidence`) after the closing commit, then close. `drwil verify` replays
+  these criteria afterwards and fails, naming them, when a proof has
+  disappeared — a row is never deleted to make a verdict green.
 - Before the closing commit, the same command reports what would make the
   closing fail: a criterion still « contract to create » (with the ID to
   write), places citing the brief that would go dead, backticked file names
@@ -99,6 +141,25 @@ request, instead of direct commits on the main branch.
   brief's `**Intent**` field) is updated, or summarised in the journal and
   removed when fully covered. A closing commit that deletes the brief
   without touching its intent gets a warning.
+- Defect revealed by the PR after the closing commit, before the merge (red
+  CI, forge code analysis): never a workaround nor routine maintenance —
+  `node .githooks/state.mjs reopen` (in CLOSING, on the workstream's branch,
+  clean worktree, the PR open: gh must answer, otherwise refused) cancels
+  the scheduled automatic merge first (`gh pr merge --disable-auto`: a
+  branch whose merge is scheduled receives no push), restores the brief as
+  it was before the commit that deleted it, in a commit touching only the
+  brief, and moves back to BUILD on it, keeping the merge authorisation and
+  the queue decided at start. Widen its scope, if needed, in a separate
+  commit; commit the fix and push normally (no history rewritten). A fix
+  that changes the rules (an existing contract modified or removed, hook,
+  threshold, gate, CI) waits for the human's yes, like a detour
+  (`node .githooks/detour.mjs allow`, interactive terminal). Then Evidence,
+  Verify and Closing as the first time: update the workstream's journal
+  entry (a second entry citing the same proof makes the closing fail),
+  `node .githooks/close.mjs` rewrites the proof on the new verified commit
+  and replaces the consumption line with the new total; schedule the merge
+  again if it was authorised. A PR already merged or closed is refused: a
+  new workstream, or routine maintenance.
 - Queue (decided at start, several briefs ticked in the `/drwil-start` poll): once the
   closing commit is pushed and the merge scheduled, go back to Scoping, wait until the PR is
   merged, update the main branch, then start the next brief yourself:
@@ -107,7 +168,10 @@ request, instead of direct commits on the main branch.
   to make) and say why; `node .githooks/state.mjs queue stop` drops what is left.
 - Active governance: the brief can be deleted during CLOSING (the state
   tolerates its absence in that activity only), then go back to Scoping
-  (`node .githooks/state.mjs move SCOPING`).
+  (`node .githooks/state.mjs move SCOPING`). The next workstream starts in a
+  new session (Claude Code: `/clear`; another tool: a new conversation): a
+  fresh context does not read the closed workstream again; a queue keeps its
+  subagent per workstream.
 - If the brief still has open points elsewhere (multi-increment project), don't
   condense anything: check the matching box in the index as before, the
   brief stays active until it's fully finished.

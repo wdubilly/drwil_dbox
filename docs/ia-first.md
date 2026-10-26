@@ -1,6 +1,6 @@
 # "IA first" architecture — description
 
-State as of 2026-10-21. This document explains **how this repo is built to be
+State as of 2026-10-26. This document explains **how this repo is built to be
 modified by agents**: where the rules live, who checks them, and what is
 not checked. It describes neither the product nor the detail of invariants
 (single source: `docs/contracts.md`); the product, if described, lives in
@@ -188,8 +188,29 @@ The attestation is bound by fingerprint to the human part of the contract
 of each check it covered. A check added later leaves it valid (it must pass
 anyway); a changed human part, or a covered check removed or redefined,
 makes it stale and the contract is `MANUAL` again. An attestation written
-before this rule (version 1) stays bound to the whole contract text. `ATTESTED` status: distinct from `PASS`, it satisfies the contract;
+before this rule (version 1) stays bound to the whole contract text.
+`ATTESTED` status: distinct from `PASS`, it satisfies the contract;
 never attestable: a `PASS`, `FAIL`, `ERROR` or not-applicable contract.
+
+**Validity rule**: an attestation is valid only as long as the object it
+attests stays as it was when judged. The object is what the contract declares
+it covers, as paths: the **Covers** field lists path patterns between
+backticks (``**Covers**: `.github/workflows/*.yml`, `src/auth/**` ``; `*` stays
+in a folder, `**` crosses folders, a trailing `/` means the whole folder).
+The attestation (version 3) records a fingerprint of the content of every file
+matched; a file modified, added, removed or renamed under a pattern, without the
+contract being touched, makes the attestation stale: `verify` names the file
+and the contract is `MANUAL` again. The fingerprint reads the files themselves
+(independent of git, replayable in CI); path order and line endings change
+nothing. A pure formatting change counts as a change: there is no safe way to
+tell it from a real one. A file outside every pattern leaves the attestation
+valid. An attestable contract without **Covers** keeps its attestation (never
+dropped for lack of coverage) but `verify` and `doctor` flag it: its
+attestation cannot fall when the code it judged changes. An attestation of
+version 1 or 2 stays valid as it is; its first renewal passes to version 3.
+`drwil attest <ID> --renew` renews on purpose an attestation that is still
+valid, from an interactive terminal and retyping the identifier, like any
+attestation.
 
 **Business rules**: the output ends with a one-line summary of
 the business non-regression — rules proven by a test (a passing contract
@@ -388,8 +409,15 @@ the files this project touches.
   at install.
 - **Shell command guard** (Claude Code, PreToolUse hook
   `.claude/hooks/bash-guard.mjs`, if present): asks for approval on a
-  secrets file or a pipe into a shell within a Bash command; blocks
-  nothing, the person decides.
+  secrets file or a pipe into a shell within a Bash command, the person
+  decides; refuses outright skipping the git hooks and `cat`, `less` or
+  `more` of the contract registry or the journal.
+- **Targeted reading** (Claude Code, PreToolUse hook on Read, read-guard in
+  `.claude/hooks/`, if present): reading `docs/contracts.md` or
+  `docs/projects/journal.md` whole, without a range, is refused before it
+  happens, with `node .githooks/glossary.mjs --contract <ID>`, `--contracts`
+  and `--journal <brief>` instead; a read by range (to edit) and a search
+  stay allowed.
 
 - **Generated copies** (`scopeMirrors` setting, absent by default): pairs
   of path prefixes `{ "from": "templates/", "to": "" }`. A scoped file under
@@ -488,15 +516,59 @@ allowed scope stays the brief's `scope` block, which is versioned.
   the `drwil verify` verdict, not only of the closing: `FAIL`, or `MANUAL`
   when the only gap is a human criterion awaiting its attestation; the
   unproven criteria are listed in every output (`criteria` in the JSON).
-  Without an active brief (CI, `drwil attest`), the verdict is unchanged.
-  A criterion judged « not-durable » says what to change, naming its
-  contract: add `[human]` when the contract is to be attested, remove it when
-  the contract is fully automated.
+  The brief is found without the local state too: it is named by
+  `.drwil/state.json` (if present), or by the `Drwil-Brief` trailer of the
+  branch's commits — so CI judges the same criteria as the machine that wrote them,
+  with the same code and the same exit code. Outside a branch carrying that
+  trailer (the main branch, `drwil attest`), no criterion is judged and the
+  verdict is unchanged. A criterion judged « not-durable » says what to
+  change, naming its contract: add `[human]` when the contract is to be
+  attested, remove it when the contract is fully automated.
+- **Closing proof**: the closing writes one versioned file per workstream,
+  `docs/preuves/<name>.md` (`dirs.proofs` setting), from the evidence it
+  required — nothing is judged again at that moment. Its form: a heading
+  (workstream, closing date, verified commit and its verdict), then one
+  table row per acceptance criterion.
+
+  ```markdown
+  # Closing proof — my-workstream
+
+  **Closed on**: 2026-10-21
+  **Verified commit**: `3f1c9a2b10` — `drwil verify` verdict: PASS
+
+  criteria of this workstream, and what still proves them today (replayed by `drwil verify` after the closing):
+
+  | Criterion | Contract | Check | Fingerprint of the covered files |
+  |---|---|---|---|
+  | the docs never cite a path that does not exist | `QUA-011` | `check-docs` | `sha256:1f3ac07b…` (2 file(s)) |
+  | the human validated the pricing rule [human] | `APP-001` | — | — |
+  ```
+
+  The checks are those the contract ran; the fingerprint covers the files of
+  its **Covers** field (`—` without one), as an attestation records them. The
+  journal entry cites the file, and **the closing is refused when it cannot
+  be written**: no brief is deleted while what it had proven would stay
+  unwritten. Unlike the run evidence, this file is documentation, versioned
+  with the code: `drwil verify` replays its criteria after the closing and
+  fails, naming them, when a proof has disappeared — a contract gone from the
+  registry, a contract that lost its check, or one that no longer passes. A
+  row is never deleted to make the verdict green: the proof is restored, or
+  the criterion retired on purpose by a workstream that says so.
 - **Closing from another activity**: `node .githooks/close.mjs` (and
   `--check`) outside CLOSING names the remaining path — the `state.mjs move`
   commands, in order, neighbouring transitions only — and, when the evidence is
   missing or from another commit than `HEAD`, the command that renews it. It
   never advances the state itself.
+- **Documentation coherence at closing**: `node .githooks/close.mjs` (and `--check`)
+  refuses, in the same single message, what check-docs only warns about at each commit —
+  an index box that contradicts the status of the brief it cites, a code
+  comment citing a workstream brief, changed or not, a deleted brief whose
+  intent the branch never touched — over the whole index, at every closing.
+  The rules live once, in `.githooks/doc-coherence.mjs`, read by both. Every correction
+  that needs no judgement (box aligned on the status; dead reference redirected to the
+  journal when it targets the closing brief, deleted otherwise) is proposed as a diff
+  and written only with `--fix`; the rest says the correction to make. A new intent
+  citing a path another intent already cites is flagged by a warning (path only).
 - **Tool-side blocks** (Claude Code, `deny` rules in
   `.claude/settings.json`, if present): `git … --no-verify`, `git commit -n` and writing `.drwil/state.json`
   (if present) directly are refused by the tool, not by the model.
@@ -549,6 +621,44 @@ queue.
   (or `next`) goes back to Scoping by itself: the brief is deleted and the
   PR merged (main branch current, or the branch merged, `gh` for a
   squash).
+- **Worktree at start**: an optional
+  third question of the poll (Claude Code) or field (Copilot CLI) named
+  `drwil-worktree`, "New worktree" or "This folder", lets the human run the
+  workstream in a sibling folder `../<repository>-<brief>`, branch
+  `workstream/<brief>` cut from the up-to-date main branch. The hook reads the
+  answer (never the model), creates the folder, runs the command declared by
+  the `worktreeInstall` setting of `.drwil/ia-first.json` (optional, e.g.
+  `npm ci`; without it nothing is run and the output says what to do; a failure
+  is reported, the folder and the state stay) and starts the workstream there
+  through `.githooks/state.mjs`: the origin folder's state does not change. A
+  brief already active in another worktree of the repository is refused, with
+  that folder's path. The state reminder names the main repository, the branch
+  and the workstream of a worktree, says the other listed folders are worktrees
+  of the same repository, and lists the open worktrees in the main folder.
+  A single brief per worktree; a sequential queue stays in the repository
+  folder.
+- **Parallel queue at start**: when several briefs are ticked, a
+  `drwil-parallel` question of the poll (Claude Code, exact header) or field
+  (Copilot CLI), "Parallel queue" or "Sequential queue", with no
+  recommendation nor default, lets the human run the queue in parallel;
+  "Sequential queue" keeps the queue in the repository folder (above). The
+  hook reads the answer (never the model) and launches each ticked brief, in
+  the poll's order, in its own worktree as above, with the merge decided at
+  the poll; no queue is written in a worktree. At most `maxParallel`
+  workstreams are active at once, all worktrees counted (setting of
+  `.drwil/ia-first.json`, 3 by default). Refused, nothing being created: fewer
+  than two briefs, a brief chosen twice, a brief that cannot enter a queue, a
+  brief already active elsewhere, going over `maxParallel`, two briefs (both
+  chosen, or one chosen and one active in a worktree) whose `scope` blocks
+  overlap — the workstreams' index and journal excepted: every closing
+  modifies them, and their conflict is resolved when rebasing. A failed launch stops the next ones without undoing those already
+  launched; the origin folder's state records the launched briefs
+  (`parallel`). With Claude Code, each workstream then runs in a subagent
+  whose working folder is its worktree; the main session keeps only the
+  reports and follows each PR until it is merged; on a closing conflict on the
+  workstreams' index or journal, the subagent rebases and resolves it alone; a
+  workstream that needs a human stops its own subagent, the others go on, and
+  a queue summary gives the state of each.
 - **Limit**: an agent with a shell could call these functions itself or
   rewrite the local state; Claude Code's `deny` rules block calling the hook
   directly, and cheating stays visible and refused off the machine (commit
@@ -573,7 +683,10 @@ never a pass: it is a warning at commit and a failure at push and in CI.
 - **Briefs always pass**: `docs/projects/` and `docs/intentions/`, as do
   human attestations, written by `drwil attest`:
   `.drwil/evidence/attestations/` (if present), and the consumption log
-  `.drwil/usage.jsonl` (if present), written at closing, and the scoping recipes' outputs,
+  `.drwil/usage.jsonl` (if present), written at closing, as is the closing
+  proof `docs/preuves/`, the release notes `docs/recettes/` (if present),
+  written by the release module and reviewed in their pull request, and
+  the scoping recipes' outputs,
   written in SCOPING (value discovery and risk audit:
   `docs/value-discovery.md` (if present), `docs/audit-risks.md` (if present), and their French
   names) — configurable list: `outOfScope`. Any other file,

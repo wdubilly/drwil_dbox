@@ -96,6 +96,18 @@ before the final release.
    checked), the reserves listed in its note. It becomes `releases/latest`,
    which never shows a pre-release: link a README there once, with no
    commit at each version.
+4. Acceptance note: right after the release, the promotion opens a pull
+   request carrying the version note, one file per version, named after it, in the `recettes` folder under `docs` (sheet, verdict, reserves,
+   who and when, tarball fingerprint) on a dedicated branch
+   `recette/vX.Y.Z` — built without touching the working tree, the index
+   or the current branch, and never overwriting an existing remote branch.
+   The tag and the release never depend on that PR: if it fails, the script
+   says so with the catch-up command (`node .githooks/recette-note.mjs
+   vX.Y.Z <note file>`, or `gh pr create` when only the PR failed) and the
+   note is kept in a file. A version released directly, without a
+   candidate, gets the same note marked « without verdict » (with a « to
+   complete » block for the human); `--dry-run` shows the note without
+   creating any branch or PR.
 
 ## Assumed limits
 

@@ -268,6 +268,15 @@
       ]
     },
     {
+      "id": "e2e",
+      "name": "QUA-020 critical path: open a song, play it, export the WAV mix",
+      "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^QUA-020$\" --no-tests=error --output-on-failure",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ]
+    },
+    {
       "id": "dbx-024",
       "name": "DBX-024 piano roll writes the step data",
       "run": "cmake -S drumbox -B drumbox/build/engine -G Ninja -DDRUMBOX_BUILD_APP=OFF && cmake --build drumbox/build/engine && ctest --test-dir drumbox/build/engine -R \"^DBX-024$\" --no-tests=error --output-on-failure",

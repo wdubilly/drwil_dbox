@@ -7,6 +7,7 @@
 // is shown or written. Never blocking: without a readable log, it says so and exits 0.
 // Usage: node .githooks/consumption.mjs [--since YYYY-MM-DD (UTC)] [--json] [--logs <folder>]
 //        node .githooks/consumption.mjs --record <brief> (at closing: one line in .drwil/usage.jsonl)
+//        node .githooks/consumption.mjs --recorded (the recorded workstreams compared, no log needed)
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
@@ -39,6 +40,8 @@ const TEXTS = {
     noBranch: "(sans branche)",
     main: "(branche principale)",
     branch: (b) => `(branche ${b})`,
+    recordedColumns: ["chantier", "date", "requêtes", "cache lu", "cache lu/req"],
+    noRecorded: `consommation : aucune ligne dans ${USAGE} — rien à comparer`,
   },
   en: {
     columns: ["workstream", "requests", "input", "output", "cache read", "cache write", "cache read/req", "weighted", "time", "models"],
@@ -54,6 +57,8 @@ const TEXTS = {
     noBranch: "(no branch)",
     main: "(main branch)",
     branch: (b) => `(branch ${b})`,
+    recordedColumns: ["workstream", "date", "requests", "cache read", "cache read/req"],
+    noRecorded: `consumption: no line in ${USAGE} — nothing to compare`,
   },
 };
 
@@ -157,6 +162,43 @@ const readable = (n, fr) => {
   return fr ? s.replace(".", ",") : s;
 };
 
+const table = (columns, body) => {
+  const widths = columns.map((e, i) => Math.max(e.length, ...body.map((c) => c[i].length)));
+  const line = (c) =>
+    c
+      .map((v, i) => (i === 0 || i === c.length - 1 ? v.padEnd(widths[i]) : v.padStart(widths[i])))
+      .join("  ")
+      .trimEnd();
+  return [line(columns), ...body.map(line)];
+};
+
+/**
+ * The indicator compared across workstreams: each line of usage.jsonl (oldest first, as written) with
+ * its average cache read per request — « — » for a line that does not give both (an estimate).
+ */
+export function formatRecorded(text, T = TEXTS.en) {
+  const fr = T === TEXTS.fr;
+  const body = [];
+  for (const l of text.split("\n")) {
+    let j;
+    try {
+      j = JSON.parse(l);
+    } catch {
+      continue;
+    }
+    if (!j?.workstream) continue;
+    const measured = j.requests > 0 && Number.isFinite(j.cache_read);
+    body.push([
+      String(j.workstream),
+      String(j.date ?? "—"),
+      measured ? String(j.requests) : "—",
+      measured ? readable(j.cache_read, fr) : "—",
+      measured ? readable(Math.round(j.cache_read / j.requests), fr) : "—",
+    ]);
+  }
+  return body.length ? table(T.recordedColumns, body).join("\n") : null;
+}
+
 /** Readable table of the measure. */
 export function format(rows, T = TEXTS.en) {
   const fr = T === TEXTS.fr;
@@ -172,13 +214,7 @@ export function format(rows, T = TEXTS.en) {
     `${l.minutes} min`,
     l.models.join(", "),
   ]);
-  const widths = T.columns.map((e, i) => Math.max(e.length, ...body.map((c) => c[i].length)));
-  const line = (c) =>
-    c
-      .map((v, i) => (i === 0 || i === c.length - 1 ? v.padEnd(widths[i]) : v.padStart(widths[i])))
-      .join("  ")
-      .trimEnd();
-  return [line(T.columns), ...body.map(line), "", T.weighted].join("\n");
+  return [...table(T.columns, body), "", T.weighted].join("\n");
 }
 
 /** The usage.jsonl line of a workstream, in the recipe's format (dashboard: workstream, tokens, model…). */
@@ -213,12 +249,19 @@ export function main(args, { env = process.env, root = process.cwd(), log = cons
     lang = JSON.parse(readFileSync(join(root, ".drwil", "ia-first.json"), "utf8"))?.lang === "en" ? "en" : "fr";
   } catch {}
   const T = TEXTS[lang];
-  const opt = { json: false, since: null, logs: null, record: null };
+  const opt = { json: false, since: null, logs: null, record: null, recorded: false };
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--json") opt.json = true;
     else if (args[i] === "--since") opt.since = Date.parse(args[++i]);
     else if (args[i] === "--logs") opt.logs = args[++i];
     else if (args[i] === "--record") opt.record = args[++i] ?? "";
+    else if (args[i] === "--recorded") opt.recorded = true;
+  }
+  if (opt.recorded) {
+    const path = join(root, USAGE);
+    const out = formatRecorded(existsSync(path) ? readFileSync(path, "utf8") : "", T);
+    (out ? log : err)(out ?? T.noRecorded);
+    return 0;
   }
   if (Number.isNaN(opt.since)) {
     err(T.badDate);
