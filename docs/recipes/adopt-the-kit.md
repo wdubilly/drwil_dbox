@@ -15,19 +15,54 @@ the requester's place (`AGENTS.md`, Conduct section).
    `drwil init --layers <layers>` (nothing to detect yet) creates each
    layer's `AGENTS.md` and the tools' per-layer instructions; fill them in
    with the stack's conventions (structure, build and test commands) and
-   declare the stack's checks (step 3).
+   declare the stack's checks (step 3). Then wire the mandatory guarantees
+   (step 3 bis): a new project is at 100 % coverage and has its e2e test
+   from the start.
 1. **Re-read the detected stack** (`.drwil/ia-first.json`): layers, tools,
    CI. Correct it if `init` got it wrong. Then **build the map**
    `docs/architecture.md` from the real code (what the application does,
    stack, every code folder with its role), in the `docLang` language
    (absent: the project language), in place of the skeleton `init` wrote: drwil maintains it from then on (its check reports a code folder
-   it does not cite).
+   it does not cite). On a project that already had indexed code, `init`
+   also wrote the reference brief « existing code »
+   (file existing-code.md of `docs/projects/`): its `scope` block lists every code
+   file indexed before the kit, and the map's « Existing code » section
+   cites their folders with a role « to describe at adoption » — so that the
+   first commit, even of a brief alone, passes. Replace those roles with
+   the real ones here. The brief then stays: a file a workstream touches
+   enters the `scope` block of that workstream's brief, as any code; a
+   deleted file leaves its list; the brief is kept as long as it covers a
+   file. `init` never rewrites it, an update never creates it and
+   `uninstall` leaves it in place.
 2. **Fill in the layer `AGENTS.md` files** (one per `layers` entry):
    Context, Test pitfalls, Layer contracts, Style and recipes, Verify —
    from the existing code, not generalities.
 3. **Declare the stack's checks** in `.drwil/ia-first.json` → `checks`
    (lint, typecheck, tests, build…): each with a `name` and a `run`, run by
    `node .githooks/run-checks.mjs` and at commit time.
+3 bis. **Wire the mandatory guarantees**: `npx drwil guarantees` (once the
+   stack is known; `--dry-run` to preview). For every layer whose stack is
+   in its table (Node/TypeScript, Python, Go, JVM), it declares the coverage
+   check in `checks`: 100 % on lines, branches, functions and statements —
+   as far as the tool measures them, said as is (Go: statements only) — on
+   a new project; on an existing project in test debt, the measured level
+   as a ratchet (never lowered), 100 % on new or modified code (diff
+   coverage) and a non-blocking `[P1]` brief to climb to 100 %. A stack
+   outside the table, a tool missing or not launchable, no `e2e` check, an
+   incomplete forge (Git, GitHub or GitLab remote, CI replaying the hook's
+   checks, protected main branch with required checks and no administrator
+   bypass) or a README, « 5 lines » or `docs/features.md` still carrying
+   skeleton text: each gets a blocking `[P0]` brief, the only one offered
+   by `/drwil-start`, and `drwil verify` is FAIL until it is held. The
+   branch protection is set by `npx drwil guarantees --protect` **with the
+   requester's agreement** only. No light profile, no waiver: a file
+   exclusion (configuration, entry point…) is declared with its reason in
+   `.drwil/ia-first.json` → `guarantees.exclusions` (`{ "layer", "path",
+   "reason" }`); one without a reason is refused. Each wired check is cited
+   by the project's coverage contract (`catalog:QUA-004`) and its e2e
+   contract (`catalog:QUA-020`), so that `drwil verify` replays them.
+   Limit: 100 % coverage proves every line is run by a test, not that it is
+   correct.
 4. **Propose the catalog's contracts** (`docs/contracts-catalog.md`) one by
    one, with their typical check: the requester keeps the `[decision]` to
    adopt each or not. An adopted contract: its catalog line becomes a section (`## ID — title`, Rule, Scope, Source of truth, Proof, Reason, Check and/or Manual) moved from the
@@ -39,10 +74,10 @@ the requester's place (`AGENTS.md`, Conduct section).
    - `catalog:QUA-014` (contrast): copy
      `templates/common/optional/front-quality/` (see its README) if a
      front end is detected, then declare its two checks.
-   - `catalog:QUA-004` (coverage) and `catalog:QUA-020` (e2e): adopt in
-     that order — a low declared threshold first so as not to block a
-     project that is just starting, raised as you go, then automated e2e
-     on critical paths as proof of real behavioral coverage.
+   - `catalog:QUA-004` (coverage) and `catalog:QUA-020` (e2e): not a
+     choice — mandatory guarantees wired at step 3 bis. A new project: 100 %
+     and e2e from the start. An existing project in debt: threshold at the
+     measured level, diff coverage at 100 %, ratchet; e2e required too.
    - The catalog's other lines have no ready-made script: propose the
      detected stack's usual tool (lint, typecheck, coverage…).
 5. **Write the first business contract**: `docs/contracts.md` ships

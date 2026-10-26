@@ -66,7 +66,7 @@ export function check({ root, maxLines, extensions, legacy, lang }) {
 
 // Run from the command line (not imported by a test): real paths compared, otherwise a
 // symlinked .githooks/ would make the check pass without verifying anything.
-if (process.argv[1] && realpathSync(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (process.argv[1] && realpathSync(process.argv[1]) === realpathSync(fileURLToPath(import.meta.url))) {
   const lang = readJson(join(".drwil", "ia-first.json")).lang;
   const errors = check({
     root: process.argv[2] ?? ".",

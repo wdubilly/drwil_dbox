@@ -34,6 +34,29 @@ Starting is the human's decision: it is **their answer to the poll**, read by a 
    - Claude Code, **second question** of the same poll: `header` exactly `drwil-merge`,
      options "Automatic merge" (the agent will schedule the merge in CLOSING) and "Manual
      merge", with no recommendation: it is the acceptance decision, taken at start.
+     Only for briefs whose scope touches code: a brief whose scope is documentation only
+     (Markdown files, `docs/`) gets no `drwil-merge` question — its PR is put in automatic merge
+     by the agent (« Documentation-only PR » rule of `AGENTS.md`), if the repository allows it.
+   - **Worktree question** (optional, only when the repository can host sibling folders): Claude
+     Code, a question of the same poll, `header` exactly `drwil-worktree`, options "New worktree"
+     (the workstream runs in a new sibling folder `../<repository>-<brief>`, branch
+     `workstream/<brief>` cut from the up-to-date main branch) and "This folder", no recommendation;
+     Copilot CLI, a field named exactly `drwil-worktree` with the same two values in its `enum`.
+     It is the human's choice, read by the hook: with "New worktree" the hook creates the folder,
+     runs the install command declared in `.drwil/ia-first.json` (`worktreeInstall`, optional) and
+     starts the workstream **there**; this folder's state does not change. Only one brief at a time
+     (a queue stays in the repository folder). Then tell the human to open a terminal in the new
+     folder and start the agent there, and stop: never work the brief from this folder. A brief
+     already active in another worktree is refused with that worktree's path.
+   - **Parallel question** (optional, only with `multiSelect: true` and at least two ready briefs):
+     Claude Code, a question of the same poll, `header` exactly `drwil-parallel`, options
+     "Parallel queue" and "Sequential queue", no recommendation; Copilot CLI, a field named exactly
+     `drwil-parallel` with the same two values in its `enum`. It is the human's choice, read by the
+     hook: with "Parallel queue" the hook launches every brief ticked, in the order of the options,
+     each in its own worktree (as for "New worktree"), at most `maxParallel` workstreams active at
+     once (`.drwil/ia-first.json`, 3 by default), and refuses without creating anything briefs whose
+     `scope` blocks overlap; "Sequential queue" keeps the queue in this folder. Never recommended:
+     the agent does not start those worktrees itself.
    - Copilot CLI: `message` starting with `drwil-start :`; a first field whose `enum` = the exact
      paths, and a **second field named exactly `drwil-merge`** with `enum` "Automatic merge" and
      "Manual merge" (no `default`, no recommendation): the hook reads `fiche=…, drwil-merge=…`.
@@ -50,8 +73,12 @@ Starting is the human's decision: it is **their answer to the poll**, read by a 
    says "Automatic merge authorised": in CLOSING, after verify PASS and pushing the closing
    commit, in this order — wait until GitHub has computed the PR and, if it is behind the main
    branch (BEHIND), update it; schedule `gh pr merge --auto --merge`; check that the merge is
-   scheduled (`gh pr view --json autoMergeRequest`); only then go back to Scoping, which clears
-   the authorisation. On failure, stay in CLOSING and report it. If `gh pr merge --auto` fails
+   scheduled (`gh pr view --json autoMergeRequest`); follow the PR with
+   `node .githooks/pr-watch.mjs <number>`, run again while it says green without merged, 30 minutes
+   at most in all; the PR merged, only then go back to Scoping, which clears the authorisation —
+   never before: once in Scoping, a red CI can no longer reopen the workstream. Red CI before the
+   merge: stay in CLOSING and `node .githooks/state.mjs reopen` (it cancels the scheduled merge).
+   Time limit exceeded, or any other failure: stay in CLOSING and report it. If `gh pr merge --auto` fails
    because the repository does not allow it (« Auto merge is not allowed for this repository »),
    say « auto-merge not allowed by the repository » and the way out — a repository admin ticks
    « Allow auto-merge » in the GitHub repository settings (General → Pull Requests), or the
@@ -61,6 +88,12 @@ Starting is the human's decision: it is **their answer to the poll**, read by a 
    the "Automatic merge" answer, in any tool. Once the PR is merged and the main branch updated,
    the next `node .githooks/state.mjs start` or `next` goes back to SCOPING by itself (brief deleted,
    closing PR merged): no `move SCOPING` to run.
+   After each push or PR creation, follow its CI with `node .githooks/pr-watch.mjs <number>`
+   (green, merged or red with the failing check); a red CI is fixed, never bypassed. Red after
+   the closing commit, PR not merged yet: `node .githooks/state.mjs reopen` (in CLOSING) cancels
+   the scheduled merge, restores the brief and moves back to BUILD on the same branch; fix,
+   close again (journal entry updated, never doubled), then schedule the merge again if it was
+   authorised.
 5. **Subagent from the first workstream** (Claude Code and Copilot CLI, queue or not): run each
    workstream in a subagent (fresh context), the first one right after the poll — Claude Code:
    the Agent tool; Copilot CLI: the `task` tool, `general-purpose` agent, `mode: "sync"`. The
@@ -68,13 +101,13 @@ Starting is the human's decision: it is **their answer to the poll**, read by a 
    session. The main session keeps only the reports and the human decisions. A subagent that needs
    the human stops with a report saying why; the main session asks the human, then resumes the
    workstream (a new subagent, whose instructions start by reading the state).
-   - The subagent works in the repository folder — never `isolation: "worktree"`:
+   - Sequential queue or single workstream: the subagent works in the repository folder — never `isolation: "worktree"`:
      `.drwil/state.json` (if present) is ignored by Git, absent from an isolated copy, and the subagent would
      believe it is in SCOPING. It receives no state reminder at start: its instructions start by
      reading the state: `node .githooks/state.mjs`, then carry the workstream until the closing is
      pushed (merge scheduled if authorised; the state then stays CLOSING until the merge), without
      running `next`, and end with the report. It cannot ask the human: on anything that needs one, it stops and says why.
-   - One subagent at a time; the main session does not change the state while it works and reads
+   - One subagent at a time (sequential mode); the main session does not change the state while it works and reads
      it again when it returns. The main session keeps only the reports.
    - **Queue** (the state says « Queue decided at start »): after the closing, the main session follows the PR with `gh` until it is merged, 30 minutes
      at most (`gh pr view <pr> --json state`), updates the main branch, then starts the next brief
@@ -88,6 +121,22 @@ Starting is the human's decision: it is **their answer to the poll**, read by a 
    - **Resuming a queue in a new session** (after `/clear` or a restart, the state in SCOPING with
      a queue): first ask « the queue resumes with <brief>: shall I start it? » and run `next` only
      on an explicit yes; anything else (« continue », silence, another request) starts nothing.
+   - **Parallel queue** (the state says « Parallel queue decided at start », the human having
+     answered "Parallel queue" to the poll): the worktrees already exist, created by the hook;
+     the main session creates none. Each workstream runs in its own subagent, started together,
+     whose working folder is its worktree (the path listed in the state reminder; never
+     `isolation: "worktree"`, which would be a copy without the state): its instructions start by
+     reading the state in that folder (`node <worktree>/.githooks/state.mjs`), it modifies no other
+     folder, carries the workstream until the closing is pushed (merge scheduled if authorised) and
+     ends with the report. The main session keeps only the reports, follows each PR with `gh` until
+     it is merged, 30 minutes at most each, without waiting for another workstream's merge. On a
+     closing conflict on the workstreams' index or journal, the subagent rebases and resolves it
+     alone. A workstream that needs a human (attestation, FAIL not fixed, red CI, merge not done
+     within 30 minutes, decision to make) stops its own subagent with a report saying why and
+     what is expected; the others go on and the main session starts nothing more by itself. A short
+     report at each closing, then a queue summary giving the state of each workstream (worktree,
+     branch, brief, activity, PR). Only Claude Code and Copilot CLI: another tool has no parallel
+     queue.
    - Another tool (Gemini CLI…): no subagent yet, the queue runs in the same session, the rest
      unchanged.
 

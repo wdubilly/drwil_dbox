@@ -15,9 +15,12 @@ fi
 # main branch either; deleting the main branch is left to the host's branch
 # protection. As soon as a pushed reference is neither a tag nor a deletion
 # (e.g. mixed push + branch), the check applies normally, to be safe.
+# The pushed remote branches (DRWIL_PUSH_REFS) are what QUA-017 judges at push time, not the
+# current branch: pushing `recette/vX.Y.Z` from master does not touch master.
 any_ref=0
 tags_only=1
 no_branch=1
+pushed=""
 while IFS=' ' read -r local_ref local_sha1 remote_ref remote_sha1; do
   any_ref=1
   case "$local_sha1" in
@@ -27,7 +30,10 @@ while IFS=' ' read -r local_ref local_sha1 remote_ref remote_sha1; do
   case "$remote_ref" in
     refs/tags/*) ;;
     *) tags_only=0
-       [ "$deletion" = "1" ] || no_branch=0 ;;
+       if [ "$deletion" = "0" ]; then
+         no_branch=0
+         pushed="$pushed $remote_ref"
+       fi ;;
   esac
 done
 
@@ -36,5 +42,8 @@ if [ "$any_ref" = "1" ] && [ "$tags_only" = "1" ]; then
 fi
 if [ "$any_ref" = "1" ] && [ "$no_branch" = "1" ]; then
   DRWIL_PUSH_NO_BRANCH=1 exec node "$(dirname "$0")/run-checks.mjs"
+fi
+if [ "$any_ref" = "1" ]; then
+  DRWIL_PUSH_REFS="$pushed" exec node "$(dirname "$0")/run-checks.mjs"
 fi
 exec node "$(dirname "$0")/run-checks.mjs"

@@ -42,6 +42,14 @@ files:
 
   - .claude/settings.json
   - .github/workflows/ia-first.yml
+  - .githooks/doc-coherence.mjs
+  - .githooks/fingerprints.mjs
+  - .githooks/pr-watch.mjs
+  - .githooks/base-checks.mjs
+  - .githooks/close-branches.mjs
+  - .githooks/worktree.mjs
+  - .githooks/closure-proof.mjs
+  - .githooks/release-review.mjs
 -->
 
 ## 1. Need

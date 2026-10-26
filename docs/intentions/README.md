@@ -20,8 +20,7 @@ removes it when fully covered.
 
 | Brief | In one line |
 |---|---|
-| [drum-box](drum-box.md) | Retro 70's funk drum machine, plugin + standalone (JUCE) |
-| [ux-followups](ux-followups.md) | Follow-ups of the interface redesign (unsaved warning, UI check, undo granularity, long chains) |
+*(empty at install — one line per brief created)*
 
 A one-line idea, too light for a brief, is noted with one command:
 `node .githooks/note.mjs "<text>"` appends a dated line to

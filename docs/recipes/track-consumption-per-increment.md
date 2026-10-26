@@ -15,7 +15,18 @@ carries its tokens, model, timestamp and git branch. One branch per brief
 node .githooks/consumption.mjs                    # per workstream: tokens, weighted, active time, models
 node .githooks/consumption.mjs --since 2026-10-01 --json
 node .githooks/consumption.mjs --record <brief>   # at closing: one line in .drwil/usage.jsonl
+node .githooks/consumption.mjs --recorded         # the recorded workstreams compared: cache read per request
 ```
+
+- Cache read per request: the context read again at each request (files
+  read, tool outputs, a long session), the first cost of a workstream.
+  `--recorded` reads `.drwil/usage.jsonl` (if present) only, no log needed, and
+  lists each recorded workstream with its average cache read per request,
+  oldest first, to compare two workstreams after a change of practice
+  (indicator, no threshold). Keeping it low: read a contract or a journal
+  entry by itself (`node .githooks/glossary.mjs --contract <ID>`,
+  `--journal <brief>`), long checks in a subagent, one session per
+  workstream.
 
 - Four token categories (input, output, cache read, cache write) and an
   indicative weighted total (in input-token equivalents: output ×5, cache

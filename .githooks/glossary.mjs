@@ -3,6 +3,8 @@
 // numbered point of the active brief, cited alone, tells the human nothing. A single source, read by
 // the checks' outputs, by any agent (`node .githooks/glossary.mjs "<text>"`) and by the agent-side
 // hooks: the labels are read from the registry, the catalog and the active brief, never copied.
+// Targeted reading (QUA-124, QUA-125): a contract's full text by its ID, the list of every contract, a
+// journal entry by its workstream — what an agent needs, without reading the whole file into its context.
 import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -13,15 +15,20 @@ const SHORT = 90;
 const short = (s) => (s.length > SHORT ? `${s.slice(0, SHORT - 1).trimEnd()}…` : s);
 const read = (p) => (existsSync(p) ? readFileSync(p, "utf8") : "");
 
+function config(root) {
+  try {
+    return JSON.parse(readFileSync(join(root, ".drwil", "ia-first.json"), "utf8")) ?? {};
+  } catch {
+    return {};
+  }
+}
+const contracts = (root, cfg = config(root)) => readContracts(read(join(root, cfg.dirs?.contracts ?? "docs/contracts.md")));
+
 /** Labels known in `root`: `Map` from the identifier as cited (« QUA-015 », « catalog:QUA-004 », « lot 3 », « point 12 ») to its label. */
 export function glossary(root) {
-  let cfg = {};
-  try {
-    cfg = JSON.parse(readFileSync(join(root, ".drwil", "ia-first.json"), "utf8")) ?? {};
-  } catch {}
+  const cfg = config(root);
   const labels = new Map();
-  for (const k of readContracts(read(join(root, cfg.dirs?.contracts ?? "docs/contracts.md"))))
-    if (k.title) labels.set(k.id, short(k.title));
+  for (const k of contracts(root, cfg)) if (k.title) labels.set(k.id, short(k.title));
   for (const m of read(join(root, cfg.dirs?.catalog ?? "docs/contracts-catalog.md")).matchAll(
     /^\|\s*(catal(?:ogue|og):[A-Z][A-Z0-9]*-\d+)\s*\|\s*([^|]+)\|/gm,
   ))
@@ -109,8 +116,78 @@ export function annotate(text, labels) {
   return out;
 }
 
-/** Runs the command: labels of the identifiers cited in the arguments (or standard input); returns the exit code. */
+/** Full text of the contract `id` in the registry (heading and fields, as written), or null. */
+export function contractText(root, id) {
+  return (
+    contracts(root)
+      .find((k) => k.id === id)
+      ?.text.trimEnd() ?? null
+  );
+}
+
+/** Every contract of the registry, one line each (`ID — title`), none left out, titles never shortened. */
+export const contractList = (root) => contracts(root).map((k) => (k.title ? `${k.id} — ${k.title}` : k.id));
+
+/**
+ * The journal entries of a workstream (`## ` sections): those citing its closing proof or its branch,
+ * otherwise those whose title contains `name` (any case). Empty when nothing matches.
+ */
+export function journalEntries(root, name) {
+  const cfg = config(root);
+  const entries = read(join(root, cfg.dirs?.projects ?? "docs/projects", "journal.md"))
+    .split(/^(?=## )/m)
+    .filter((e) => e.startsWith("## "))
+    .map((e) => e.trimEnd());
+  const slug = escapeRe(name);
+  const cites = new RegExp(`${escapeRe(cfg.dirs?.proofs ?? "docs/preuves")}/${slug}\\.md|(?:workstream|chantier)/${slug}(?![\\w.-])`);
+  const byWorkstream = entries.filter((e) => cites.test(e));
+  if (byWorkstream.length) return byWorkstream;
+  const lower = name.toLowerCase();
+  return entries.filter((e) => e.split("\n", 1)[0].toLowerCase().includes(lower));
+}
+
+const TEXTS = {
+  fr: {
+    unknown: (id) => `contrat ${id} absent du registre (liste : node .githooks/glossary.mjs --contracts)`,
+    noEntry: (n) => `aucune entrée du journal pour « ${n} » (ni sa preuve, ni sa branche, ni son titre)`,
+    usage: "usage : node .githooks/glossary.mjs [<texte>] | --contract <ID> | --contracts | --journal <chantier>",
+  },
+  en: {
+    unknown: (id) => `contract ${id} not in the registry (list: node .githooks/glossary.mjs --contracts)`,
+    noEntry: (n) => `no journal entry for "${n}" (neither its proof, nor its branch, nor its title)`,
+    usage: "usage: node .githooks/glossary.mjs [<text>] | --contract <ID> | --contracts | --journal <workstream>",
+  },
+};
+
+/** The targeted readings (`--contract`, `--contracts`, `--journal`): exit code, or null for another command. */
+function targeted(args, root, log) {
+  const T = TEXTS[config(root).lang === "en" ? "en" : "fr"];
+  const [option, value] = args;
+  if (option === "--contracts") {
+    for (const line of contractList(root)) log(line);
+    return 0;
+  }
+  if (option !== "--contract" && option !== "--journal") return null;
+  if (!value) {
+    log(T.usage);
+    return 2;
+  }
+  const found = option === "--contract" ? [contractText(root, value)].filter(Boolean) : journalEntries(root, value);
+  if (!found.length) {
+    log(option === "--contract" ? T.unknown(value) : T.noEntry(value));
+    return 1;
+  }
+  log(found.join("\n\n"));
+  return 0;
+}
+
+/**
+ * Runs the command: a targeted reading (above), or the labels of the identifiers cited in the arguments
+ * (or standard input); returns the exit code.
+ */
 export function main(args = process.argv.slice(2), root = process.cwd(), log = console.log, input = () => readFileSync(0, "utf8")) {
+  const code = targeted(args, root, log);
+  if (code !== null) return code;
   let text = args.join(" ");
   if (!args.length) {
     try {

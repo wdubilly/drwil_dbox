@@ -18,24 +18,23 @@ jobs:
           echo "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba  gitleaks.tar.gz" | sha256sum -c -
           mkdir -p ~/.local/bin && tar -xzf gitleaks.tar.gz -C ~/.local/bin gitleaks && rm gitleaks.tar.gz
           ~/.local/bin/gitleaks version
-      - name: Install the C++ build toolchain and JUCE Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends ninja-build cmake libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype-dev libfontconfig1-dev
       - run: node .githooks/run-checks.mjs
-  windows-build:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v7
-      - name: Build the standalone app
+      # QUA-113: on a pull request, the checks are replayed with the main branch's hooks (its
+      # .githooks/, read through Git) and the PR's list of checks: a PR that weakens a hook or
+      # removes a check does not validate itself. The main branch's copy of base-checks.mjs runs;
+      # the PR's only while the main branch has none yet (kit adoption).
+      - name: Replay the checks with the main branch's hooks
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
         run: |
-          cmake -S drumbox -B drumbox/build/win -DCMAKE_BUILD_TYPE=Release
-          cmake --build drumbox/build/win --config Release --target DrumBox
-      - uses: actions/upload-artifact@v4
-        with:
-          name: DrumBox-windows
-          path: drumbox/build/win/DrumBox_artefacts/Release/Drum Box.exe
-          if-no-files-found: error
+          base="origin/$BASE_REF"
+          if git cat-file -e "$base:.githooks/base-checks.mjs" 2>/dev/null; then
+            git show "$base:.githooks/base-checks.mjs" > "$RUNNER_TEMP/base-checks.mjs"
+            node "$RUNNER_TEMP/base-checks.mjs" --base "$base"
+          else
+            node .githooks/base-checks.mjs --base "$base"
+          fi
   # No branch protection is possible on a private repository on the free plan
   # (GitHub.com's "Merge" button stays unconditional): only an after-the-fact
   # alert is possible. Triggers only on a push to the main branch (not on

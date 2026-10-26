@@ -8,6 +8,7 @@ import * as scope from "./scope.mjs";
 import { definedIds, idConflicts, knownChecks, readContracts, validateContracts } from "./contracts.mjs";
 import { checkRisk } from "./risk.mjs";
 import { briefReferenceProblems } from "./check-code-rules.mjs";
+import { checkboxProblems, MARKERS_RE, OPTIONAL_RE, STATUS_RE, TO_CREATE_RE } from "./doc-coherence.mjs";
 import { briefMaturity, briefStatus, readyGaps } from "./state.mjs";
 import { skillHeaderProblems } from "./skill-headers.mjs";
 
@@ -30,8 +31,6 @@ const T = {
     summary: (n, e) => `check-docs : ${n} fichiers scannés, ${e} erreur(s)`,
     scopeWarnings: (n) =>
       `check-docs : ${n} avertissement(s) de cadrage (QUA-016, non bloquant — réglage "scopeReminder" de .drwil/ia-first.json)`,
-    openButDone: (brief) => `case ouverte mais la fiche ${brief} se dit déjà terminée (QUA-015)`,
-    checkedButOpen: (brief) => `case cochée mais la fiche ${brief} ne se dit pas terminée (QUA-015)`,
     briefDone: (brief) =>
       `${brief} : fiche terminée encore présente — la condenser dans docs/projects/journal.md, la supprimer et retirer sa ligne de l'index (QUA-015)`,
     consistencyWarnings: (n) => `check-docs : ${n} avertissement(s) de cohérence case/statut (QUA-015, non bloquant)`,
@@ -57,8 +56,6 @@ const T = {
     scopeBroad: (f, p) => `${f}: scope pattern too broad « ${p} »`,
     summary: (n, e) => `check-docs: ${n} files scanned, ${e} error(s)`,
     scopeWarnings: (n) => `check-docs: ${n} scope warning(s) (QUA-016, non-blocking — "scopeReminder" setting in .drwil/ia-first.json)`,
-    openButDone: (brief) => `item unchecked but ${brief} already says it is done (QUA-015)`,
-    checkedButOpen: (brief) => `item checked but ${brief} does not say it is done (QUA-015)`,
     briefDone: (brief) =>
       `${brief}: finished card still present — condense it into docs/projects/journal.md, delete it and remove its index line (QUA-015)`,
     consistencyWarnings: (n) => `check-docs: ${n} checkbox/status consistency warning(s) (QUA-015, non-blocking)`,
@@ -71,8 +68,6 @@ const T = {
   },
 }[lang];
 
-const BRIEF_CITATION_RE = /`((?:docs\/projects|docs\/intentions)\/[^`]+\.md)`/g;
-
 // Severity of the scope reminder (QUA-016 only; the rest of check-docs always stays blocking):
 // "blocking" (historical default), "warning" (never blocking, only shown) or "off" (disabled).
 const SCOPE_LEVELS = new Set(["blocking", "warning", "off"]);
@@ -80,13 +75,6 @@ const scopeLevel = SCOPE_LEVELS.has(cfg.scopeReminder) ? cfg.scopeReminder : "wa
 
 const CODE_RE = /`([^`\s]+)`/g;
 const EXT_RE = /\.(md|mdc|mjs|cjs|js|ts|tsx|jsx|py|sh|json|ya?ml|toml|txt)$/;
-// A line that declares the file optional must not fail the check.
-const OPTIONAL_RE = /si présent|if present/i;
-// A planned path not created yet, marked right after the citation, is not an error.
-const TO_CREATE_RE = /^\s*\(à créer\)|^\s*\(to create\)/i;
-const MARKERS_RE = /\[(IA|humain|décision|AI|human|decision)\]/i;
-// tolerates a date in parentheses right after the word (e.g. "**Status** (2026-10-04):").
-const STATUS_RE = /^\*{0,2}(Statut|Status)\*{0,2}\s?(\([^)]*\))?\s?:/;
 const DATE_RE = /\b\d{4}-\d{2}-\d{2}\b/;
 // Intent sections, in either language (an intent written before a language switch stays valid), named in the project's.
 const INTENT_SECTIONS = [
@@ -268,7 +256,7 @@ if (scopeLevel === "warning" && scopeProblems.length) {
   for (const e of scopeProblems) console.log(`  ⚠ ${e}`);
   console.log(T.scopeWarnings(scopeProblems.length));
 }
-const consistencyProblems = checkCheckboxStatus();
+const consistencyProblems = checkboxProblems(root, cfg, lang).map((p) => `${p.place} : ${p.message}`);
 if (consistencyProblems.length) {
   for (const e of consistencyProblems) console.log(`  ⚠ ${e}`);
   console.log(T.consistencyWarnings(consistencyProblems.length));
@@ -283,49 +271,6 @@ if (newWarnings.length) {
   console.log(T.newWarnings(newWarnings.length));
 }
 process.exit(errors.length ? 1 : 0);
-
-// QUA-015 (extension): the box ([ ]/[x]) of an index line must reflect the actual status of the
-// brief it cites — a non-blocking warning (same family as QUA-016), because the "Status" text
-// stays free (prose), not a structured field that can be checked for sure.
-function checkCheckboxStatus() {
-  const warnings = [];
-  const indexPath = join(root, cfg.dirs?.index ?? "docs/projects/pending.md");
-  if (!existsSync(indexPath)) return warnings;
-  const relIndex = relative(root, indexPath);
-  const lines = readFileSync(indexPath, "utf8").split(/\r?\n/);
-  // groups each bullet (an entry may spread over several indented lines): a new bullet starts at "- [ ]" or "- [x]".
-  let bullet = null;
-  const bullets = [];
-  for (let i = 0; i < lines.length; i++) {
-    const m = /^\s*-\s*\[( |x|X)\]/.exec(lines[i]);
-    if (m) {
-      bullet = { checked: m[1].toLowerCase() === "x", line: i + 1, text: lines[i] };
-      bullets.push(bullet);
-    } else if (bullet && lines[i].trim() !== "" && /^\s+\S/.test(lines[i])) {
-      bullet.text += "\n" + lines[i];
-    } else {
-      bullet = null;
-    }
-  }
-  for (const b of bullets) {
-    for (const m of b.text.matchAll(BRIEF_CITATION_RE)) {
-      const briefPath = join(root, m[1]);
-      if (!existsSync(briefPath)) continue; // reported elsewhere (cited path not found).
-      const briefText = readFileSync(briefPath, "utf8");
-      if (
-        !briefText
-          .split(/\r?\n/)
-          .slice(0, 15)
-          .some((l) => STATUS_RE.test(l))
-      )
-        continue; // reported elsewhere (no Status line).
-      const done = briefStatus(briefText) === "done";
-      if (!b.checked && done) warnings.push(`${relIndex}:${b.line} : ${T.openButDone(m[1])}`);
-      else if (b.checked && !done) warnings.push(`${relIndex}:${b.line} : ${T.checkedButOpen(m[1])}`);
-    }
-  }
-  return warnings;
-}
 
 // QUA-015: each workstream can be resumed cold (markers, dated status, sections, Hand-off).
 function checkWorkstreams() {
