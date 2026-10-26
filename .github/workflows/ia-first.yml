@@ -22,6 +22,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends ninja-build cmake libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype-dev libfontconfig1-dev
+      - name: Install the coverage tools (gcovr, diff-cover)
+        run: pip install gcovr diff-cover
       - run: node .githooks/run-checks.mjs
       # QUA-113: on a pull request, the checks are replayed with the main branch's hooks (its
       # .githooks/, read through Git) and the PR's list of checks: a PR that weakens a hook or

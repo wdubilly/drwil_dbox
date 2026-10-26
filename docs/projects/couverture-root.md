@@ -8,6 +8,10 @@
 <!-- scope
 files:
   - .drwil/ia-first.json
+  - docs/contracts.md
+  - .github/workflows/ia-first.yml
+  - docs/projects/pending.md
+  - docs/projects/journal.md
 -->
 
 ## 1. Need
@@ -18,7 +22,7 @@ drwil guarantees 100 % test coverage (lines, branches, functions, statements, as
 
 ## Acceptance criteria
 
-- The layer's coverage check is declared, cited by the project's coverage contract and green — contract to create
+- The layer's coverage check is declared, cited by the project's coverage contract and green, proven by `QUA-004`
 
 ## 4. Decisions
 
@@ -34,4 +38,5 @@ drwil guarantees 100 % test coverage (lines, branches, functions, statements, as
 
 ## 6. Hand-off
 
-- **Last state**: written by `drwil guarantees`; as long as it is not resolved, `drwil verify` is FAIL and `/drwil-start` offers only it.
+- **Last state** (2026-10-27): checks `coverage-root` (ratchet lines 93 / branches 60 / functions 99) and `coverage-diff-root` declared, contract QUA-004 written, CI installs gcovr and diff-cover; JUCE UI excluded in `guarantees.exclusions`.
+- **Next step**: closing (journal, `node .githooks/close.mjs`, PR). Limit: `drwil guarantees` itself still reports « stack not detected » (C++ is outside its tools table); `drwil verify` judges the declared checks.

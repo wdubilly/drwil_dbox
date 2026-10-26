@@ -26,6 +26,7 @@ otherwise.
 ## Projects
 
 - [ ] [decision] [P2] Drum box, follow-ups of the interface redesign: `docs/intentions/ux-followups.md`
+- [ ] [decision] [P2] Engine coverage, climb from the ratchet to 100 %: `docs/intentions/coverage-climb.md`
 
 <!-- Example:
 - [ ] [AI] short title of the topic, link to a brief if more than two lines
@@ -33,4 +34,3 @@ otherwise.
 - [x] topic delivered (YYYY-MM-DD).
 -->
 
-- [ ] [human] [P0] Guarantee: test coverage of layer `.` — `docs/projects/couverture-root.md`
