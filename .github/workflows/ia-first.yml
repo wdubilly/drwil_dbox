@@ -18,6 +18,10 @@ jobs:
           echo "5bc41815076e6ed6ef8fbecc9d9b75bcae31f39029ceb55da08086315316e3ba  gitleaks.tar.gz" | sha256sum -c -
           mkdir -p ~/.local/bin && tar -xzf gitleaks.tar.gz -C ~/.local/bin gitleaks && rm gitleaks.tar.gz
           ~/.local/bin/gitleaks version
+      - name: Install the C++ build toolchain and JUCE Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build cmake libasound2-dev libx11-dev libxext-dev libxrandr-dev libxinerama-dev libxcursor-dev libfreetype-dev libfontconfig1-dev
       - run: node .githooks/run-checks.mjs
       # QUA-113: on a pull request, the checks are replayed with the main branch's hooks (its
       # .githooks/, read through Git) and the PR's list of checks: a PR that weakens a hook or
