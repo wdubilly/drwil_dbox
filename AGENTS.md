@@ -7,7 +7,10 @@ must stay readable by any tool.
 
 ## The project in 5 lines
 
-drwil_dbox — (to describe: what the application does, for whom)
+drwil_dbox — Drum Box: a standalone retro drum machine and groove box (C++17, JUCE 8) for
+musicians: 16-step sequencer, twelve synthesised tracks (drums, bass, synth, pluck, FX), a
+pattern chain, a mixer with effects, `.dbox` song files and WAV export. Linux first,
+Windows next. Details: `docs/features.md`.
 Full map and stack: `docs/architecture.md`. A new project fills these five
 lines in when it is scoped (`docs/recipes/adopt-the-kit.md`, step 0).
 

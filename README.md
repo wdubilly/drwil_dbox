@@ -1,14 +1,21 @@
 # drwil_dbox
 
-(to describe: what the application does, for whom)
+Drum Box is a standalone retro drum machine for musicians: a 16-step sequencer with twelve
+synthesised tracks (eight drums, bass, a four-voice synth, a pluck, FX), 16 patterns chained into
+a song, a mixer with five effects, song files and WAV export. Dark flat look by default, 70's
+funk skin as an option.
 
 > **Code assistants**: start with `AGENTS.md` (conduct, contracts, context
 > loading).
 
 ## At a glance
 
-*(a simple diagram of the main flow — browser, services, databases — to add
-once the stack has settled)*
+```
+UI (JUCE: MainComponent, SequenceView, DetailPanel)
+   |  edits the song, reads the playback state
+   v
+Engine (pure C++, drumbox_engine): Song -> Sequencer -> voices -> mixer -> effects -> audio / WAV
+```
 
 ## Getting started
 
