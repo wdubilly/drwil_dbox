@@ -32,3 +32,5 @@ otherwise.
   are needed, otherwise the topic fits here.
 - [x] topic delivered (YYYY-MM-DD).
 -->
+
+- [ ] [human] [P0] Guarantee: test coverage of layer `.` — `docs/projects/couverture-root.md`
