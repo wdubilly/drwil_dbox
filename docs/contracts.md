@@ -58,6 +58,15 @@ contracts » section).
 
 ## Quality (QUA)
 
+## QUA-004 — The engine's test coverage does not drop
+**Rule** : The engine's test coverage (gcov, read by gcovr) never goes below the level measured at adoption (ratchet: lines 93 %, branches 60 %, functions 99 %), and every new or modified engine line is covered at 100 % (diff coverage against the main branch). The JUCE interface files are excluded with their reason in `guarantees.exclusions`. Raising a threshold is free, lowering one is never allowed.
+**Scope** : the drum box engine (`drumbox/Source`), the interface files excluded
+**Source of truth** : `.drwil/ia-first.json` (`coverage-root` thresholds, `guarantees.exclusions`)
+**Proof** : the checks `coverage-root` and `coverage-diff-root`, hook + CI; 100 % proves lines are run by a test, not that they are correct
+**Reason** : untested engine code breaks silently under a musician's song; the ratchet stops the debt from growing
+**Check** : `coverage-root`, `coverage-diff-root`
+**Origin** : couverture-root — « The layer's coverage check is declared, cited by the project's coverage contract and green — contract to create »
+
 ## QUA-011 — Docs never wrong
 **Rule** : Every repo path and every contract ID cited in the docs and the skills exist (IDs defined exactly once in the registry).
 **Scope** : `AGENTS.md`, layer `AGENTS.md` files, `docs/`, `.claude/skills/` (if present)

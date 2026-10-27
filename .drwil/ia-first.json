@@ -284,6 +284,26 @@
         "drumbox/**",
         ".drwil/ia-first.json"
       ]
+    },
+    {
+      "id": "coverage-root",
+      "name": "Engine test coverage, ratchet at the measured level (gcov)",
+      "run": "find drumbox/build/coverage -name '*.gcda' -delete 2>/dev/null; cmake -S drumbox -B drumbox/build/coverage -G Ninja -DDRUMBOX_BUILD_APP=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=--coverage && cmake --build drumbox/build/coverage && ctest --test-dir drumbox/build/coverage --no-tests=error --output-on-failure && gcovr -r . --filter 'drumbox/Source/' --exclude 'drumbox/Source/MainComponent\\.cpp' --exclude 'drumbox/Source/SequenceView\\.cpp' --exclude 'drumbox/Source/DetailPanel\\.cpp' --exclude 'drumbox/Source/Widgets\\.cpp' --exclude 'drumbox/Source/Theme\\.cpp' --exclude 'drumbox/Source/FlatLookAndFeel\\.cpp' --exclude 'drumbox/Source/FunkLookAndFeel\\.cpp' --exclude 'drumbox/Source/Main\\.cpp' --fail-under-line 93 --fail-under-branch 60 --fail-under-function 99 drumbox/build/coverage/CMakeFiles/drumbox_engine.dir drumbox/build/coverage/CMakeFiles/drumbox_tests.dir",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ],
+      "degradable": false
+    },
+    {
+      "id": "coverage-diff-root",
+      "name": "100 % coverage on new or modified engine code (gcov, diff-cover)",
+      "run": "find drumbox/build/coverage -name '*.gcda' -delete 2>/dev/null; cmake -S drumbox -B drumbox/build/coverage -G Ninja -DDRUMBOX_BUILD_APP=OFF -DCMAKE_BUILD_TYPE=Debug -DCMAKE_CXX_FLAGS=--coverage && cmake --build drumbox/build/coverage && ctest --test-dir drumbox/build/coverage --no-tests=error --output-on-failure && gcovr -r . --filter 'drumbox/Source/' --exclude 'drumbox/Source/MainComponent\\.cpp' --exclude 'drumbox/Source/SequenceView\\.cpp' --exclude 'drumbox/Source/DetailPanel\\.cpp' --exclude 'drumbox/Source/Widgets\\.cpp' --exclude 'drumbox/Source/Theme\\.cpp' --exclude 'drumbox/Source/FlatLookAndFeel\\.cpp' --exclude 'drumbox/Source/FunkLookAndFeel\\.cpp' --exclude 'drumbox/Source/Main\\.cpp' --cobertura drumbox/build/coverage/cobertura.xml drumbox/build/coverage/CMakeFiles/drumbox_engine.dir drumbox/build/coverage/CMakeFiles/drumbox_tests.dir && diff-cover drumbox/build/coverage/cobertura.xml --compare-branch=origin/main --fail-under=100",
+      "paths": [
+        "drumbox/**",
+        ".drwil/ia-first.json"
+      ],
+      "degradable": false
     }
   ],
   "scopeReminder": "blocking",
@@ -311,11 +331,55 @@
   "mode": "full",
   "guarantees": {
     "enforced": true,
-    "layers": {},
+    "layers": {
+      "root": "existing"
+    },
     "protection": {
       "forge": "github",
       "branch": "main",
       "verifiedAt": "2026-10-26"
-    }
+    },
+    "exclusions": [
+      {
+        "layer": ".",
+        "path": "drumbox/Source/MainComponent.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/SequenceView.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/DetailPanel.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/Widgets.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/Theme.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/FlatLookAndFeel.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/FunkLookAndFeel.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      },
+      {
+        "layer": ".",
+        "path": "drumbox/Source/Main.cpp",
+        "reason": "JUCE user interface: no display in CI to test it (QUA-020 leaves the interface out as well)"
+      }
+    ]
   }
 }
